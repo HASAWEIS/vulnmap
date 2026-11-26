@@ -1,199 +1,345 @@
 # vulnmap
 
-以 **Discovery v1.0** 为唯一发现入口的漏洞挖掘运行时：源码 + 构建描述 → 调用点 → 假设/种子 → 覆盖率 fuzz → 分诊 → 报告。
-旧五阶段复现流程（Recon → Locate → Verify → Exploit → Report）已归档，仅用于历史案例，不再是新任务入口。
+面向 **CyberGym / ExploitGym / VulnGym** 的漏洞挖掘运行时：从**源码或二进制 + 构建方式**出发，做危险调用点排序、可证伪假设、覆盖率引导 fuzz、分诊、独立验证与证据打包。
 
-## 旧复现平台模块（已归档）
+设计原则一句话：**Agent 只指路，Fuzz 证明，Triage/Review 判定，报告只写可追溯的事实。**
 
-> Discovery 的模块在 `agent/discovery/`，见下节；下表仅用于历史案例维护。
+> 本项目用于授权范围内的本地靶场、CTF 与课程实验。请勿用于未授权目标。
 
-| 模块 | 文件 | 说明 |
-|---|---|---|
-| 契约 | `agent/contracts.py` | `StageRequest` / `ToolPolicy` / `Budget` / `OutputContract`，构造期即校验 |
-| 校验 | `agent/validate.py` | 字节数 → JSON → 必填 → schema → 语义 guard（行号存在、哈希一致、上游未改） |
-| 策略 | `agent/policy.py` | 按阶段工具白名单；`shell` / `binscan` 入口强制 `check_tool`，非白名单在 exec 之前抛 `ToolDenied` |
-| 预算 | `agent/budget.py` | 进入即消耗一轮（拦住第 max+1 次进入）；超时轮照常计入；耗时累加结算 |
-| 检查点 | `agent/checkpoint.py` | 逐镜像真实 digest（可与 `docker inspect` 对账）、输入与工件哈希、版本号；缺镜像抛 `ImageMissing`，不降级 |
-| 版本配置 | `agent/config.py` + `configs/versions.json` | `role_version` / `prompt_version` 由文件读取，改配置即让检查点失效；上游版本变化向下级联 |
-| 存储 | `agent/store.py` | SQLite：runs/stages/attempts/artifacts/evidence/claims/blackboard/checkpoints |
-| 工具 | `agent/tools/` | 受控 shell（超时+日志）、源码 grep / 函数定位 / 行窗口 / magic 探测 |
-| 阶段 | `agent/stages/` | recon / locate / verify / exploit / report |
-| 编排 | `agent/runtime/orchestrator.py` | 状态机 + 迁移条件 + 降级路径 |
-| 入口 | `bin/vulnmap.py` | 旧复现平台入口（已归档），新任务请用 `bin/discover.py` |
+---
 
-## Discovery v1.0（唯一发现入口）
+## 目录
 
-旧复现平台归档，Discovery 是唯一入口，不做双轨、不设备选路径。输入只有源码/二进制与构建方式，
-不读取 `error.txt` / `patch.diff` / 官方 PoC；Agent 只读源码产假设，Fuzz 证明，Triage/Review 判定。
+- [它解决什么问题](#它解决什么问题)
+- [三条主线](#三条主线)
+  - [1. Discovery：无已知崩溃的源码优先发现](#1-discovery无已知崩溃的源码优先发现)
+  - [2. V2 任务运行时：状态机 + 事件 + 证据](#2-v2-任务运行时状态机--事件--证据)
+  - [3. V3 自适应 Harness：执行感知与受限自修改](#3-v3-自适应-harness执行感知与受限自修改)
+- [快速开始](#快速开始)
+- [CLI 速查](#cli-速查)
+- [隔离与安全边界](#隔离与安全边界)
+- [诚实状态](#诚实状态)
+- [仓库结构](#仓库结构)
+- [文档索引](#文档索引)
+- [测试](#测试)
+- [许可与引用](#许可与引用)
 
-```bash
-python3 bin/discover.py fixtures/discovery --out /tmp/out --seconds 3 --max-sites 3
-python3 bin/discover.py /tmp/cJSON --target-yaml examples/targets/cjson.yaml \
-  --out discovery/real-cjson --seconds 60 --max-sites 8
-python3 bin/discover.py /path/to/target --init-target   # 生成 target.yaml 草稿
-python3 bin/discover.py fixtures/discovery_png --format png --out /tmp/png-out --seconds 5
-python3 bin/covfuzz.py /tmp/png/png_fuzz --corpus corpus --crashes crashes \
-  --stats stats --seconds 60 --workers 4 --format png
-python3 experiments/agent_seed_ab.py
+---
+
+## 它解决什么问题
+
+传统复现流程依赖"已知崩溃信息"（error.txt / patch.diff / 官方 PoC），本质是**答案已知后的重放**。vulnmap 的 Discovery 主线反过来：
+
+- **输入只有**：源码或 ELF、构建方式（`target.yaml` 或自动探测）；
+- **不读取**：`error.txt`、`patch.diff`、官方 PoC；
+- **不假设**：不知道崩溃在哪一行，先按危险调用点与可达性排序；
+- **可证伪**：每条假设必须写清"怎么证明它是错的"；
+- **可审计**：结论必须能追到输入哈希、构建哈希、日志与证据文件。
+
+它不承诺发现 0day。它承诺的是：**每条结论都有证据链，没有证据就写 `needs_evidence`。**
+
+---
+
+## 三条主线
+
+### 1. Discovery：无已知崩溃的源码优先发现
+
+```text
+D0 静态档案     后缀 / ELF magic / main / 函数 / 格式
+D1 调用点排序   memcpy/strcpy/sprintf/malloc/read… · 权重 3/2/1 · 近似可达 · 参数可控
+D1.5 只读分析   默认 LLM（无 key 回退规则）· ≤8 条可证伪假设 · 定向种子 + 字典
+D2 覆盖率 Fuzz  ASAN + trace-pc/trace-cmp · 64K bitmap · cmp 操作数入字典
+D3 分诊门禁     有效诊断 + 独立目录干净重建 3/3
+D3.5 复核       规则复核，或显式开启单次 LLM 复核
+D4 报告 + 台账  report.json / report.md / SQLite campaign.db
+D5 对照实验     ranked vs random · Agent 种子 vs 纯 fuzz · 负结果保留
 ```
 
-流水线 D0 静态档案 → D1 调用点台账 → D1.5 只读分析（默认 LLM，无 key 回退规则）/种子 → D2 覆盖率 fuzz → D3 分诊 →
-D3.5 复核 → D4 报告 → D5 ranked/random 与种子 A/B。P4 支持 `target.yaml` 描述构建与 harness
-（内置 cjson/libpng harness、自定义 harness、预构建对象/库），示例见 `examples/targets/`。
-方案见 [docs/DISCOVERY-V1.md](docs/DISCOVERY-V1.md)，实跑结果与负结果见
-[docs/DISCOVERY-V1-RESULTS.md](docs/DISCOVERY-V1-RESULTS.md)。
+关键设计：
 
-## 平台：Discovery 只读视图
+| 设计 | 原因 |
+|---|---|
+| 假设 ≤ 8 条、必须可证伪 | 防止"什么都可能是漏洞"的伪分析 |
+| Fuzz 才是证明手段 | 模型不产 verdict；崩溃也不等于高危 |
+| 干净重建 3/3 才算复现 | 复用旧构建的"能跑"不算证据 |
+| WRITE → `confirmed`；READ/UB → `weakened` | 不把越界读夸大成可写漏洞 |
+| 负结果保留 | 0 崩溃、0 覆盖、构建失败都记录，不删不改写 |
+
+实现：`agent/discovery/`（`profile / callsites / agents / covfuzz / coverage_map / triage / report / campaign`），入口 `bin/discover.py`、`bin/covfuzz.py`。
+
+### 2. V2 任务运行时：状态机 + 事件 + 证据
+
+把"跑一个任务"变成**可恢复、可审计、可重放**的过程：
+
+```text
+RECEIVED → PREFLIGHT → READY → UNDERSTANDING → HYPOTHESES
+        → PLANNED → RUNNING → CANDIDATE → VERIFYING → REVIEW
+        → REPORTED → CLOSED
+异常分支：BLOCKED / FAILED / NO_REPRO / NEEDS_EVIDENCE / REJECTED / CANCELLED / TERMINATED
+```
+
+- **TaskState**：主状态机，非法迁移直接拒绝；
+- **EventBus**：append-only 事件流，可重放校验每一步 `state.changed`；
+- **EvidenceStore**：内容寻址（`evidence/<sha256>`），报告只引用哈希；
+- **Candidate / Verification / Review / Report**：候选、按赛道判定、复核、Case Pack 分离；
+- **Budget**：`max_seconds / max_execs / max_tokens / max_turns` 强制，超限终止；
+- **Job**：launcher 进程事实与实验语义分开，支持取消与 UNKNOWN 对账。
+
+按赛道判定，不硬套同一把尺子：
+
+| 赛道 | 判据 |
+|---|---|
+| CyberGym | 同输入 vuln 崩溃 / fix 干净 |
+| ExploitGym | 官方入口取到 flag（不要求 fix 端） |
+| VulnGym | 服务端行为差分或定位证据 |
+| 通用 `target.yaml` | 单端 fuzz 只到 `candidate`，不冒充独立验证 |
+
+实现：`agent/platform/`（`task / store / events / evidence / preflight / program / hypotheses / planner / executors / candidates / verify / review / casepack / runners / benchmark_policy`），入口 `bin/platform.py`。
+
+### 3. V3 自适应 Harness：执行感知与受限自修改
+
+在 `RUNNING` 内部加一层**慢循环**，让下一步由真实执行反馈决定，而不是固定脚本：
+
+```text
+OBSERVE → DIAGNOSE → PROPOSE → AUTHORIZE → STAGE → BUILD/SMOKE
+        → EXECUTE → COLLECT → COMPARE → ADOPT / REVERT / STOP
+```
+
+边界写死：
+
+- **模型只读事实、只提建议**，不写状态、不写证据、不改判据；
+- **自修改仅限实验副本**（白名单配置、seed、字典、观测点），原件只读；
+- **执行器必须回报实际加载的版本**，计划版本不算证据；
+- **隔离 fail-closed**：构建/冒烟只认 `bwrap` / `container` 强隔离，只剩 `unshare` 时在启动子进程前拒绝；
+- **工程采纳 ≠ 漏洞验证**：模型/规则都不能写 `verified` / `confirmed`。
+
+三条硬语义修正（都有回归）：
+
+1. `program_started` / `input_processed` / `checkpoint_reached` 三段分开，没探针记 `unknown`，不填 `false`；
+2. `target_reached` 只由 `checkpoint_reached` 派生，不再用 `coverage_bits>0` 或 `execs>0` 冒充；
+3. 逐调用参数账本区分 `sent` / `not_sent` / `missing`，不用默认值回填历史。
+
+实现：`agent/platform/adaptive/`（`controller / session / workspace / revision / snapshot / contracts / tools / policy / handoff / budget / jobs / recovery / call_ledger / llm_provider / real_ab / compare / patch / backends`）。
+
+---
+
+## 快速开始
+
+要求：Python ≥ 3.11；运行时**零第三方依赖**（标准库）。Fuzz 需要 `gcc` 与 ASAN；隔离建议安装 `bubblewrap`。
+
+```bash
+git clone https://github.com/HASAWEIS/vulnmap.git
+cd vulnmap
+
+# 1) Discovery：受控 fixture，3 秒
+python3 bin/discover.py fixtures/discovery --out /tmp/out --seconds 3 --max-sites 3
+
+# 2) Discovery：真实目标（需本地源码树）
+python3 bin/discover.py /path/to/cJSON --target-yaml examples/targets/cjson.yaml \
+  --out discovery/real-cjson --seconds 60 --max-sites 8
+
+# 3) 生成 target.yaml 草稿
+python3 bin/discover.py /path/to/target --init-target
+```
+
+V2 任务运行时（任务接入 → 准入 → 理解 → 假设 → 规划 → 执行）：
+
+```bash
+python3 bin/platform.py --db .platform/platform.db submit \
+  --benchmark cybergym --target workspace/CG-01-arvo-44034 \
+  --task-id cg01 --meta task_id=arvo:44034 --meta authorized=true
+python3 bin/platform.py --db .platform/platform.db preflight cg01
+python3 bin/platform.py --db .platform/platform.db understand cg01
+python3 bin/platform.py --db .platform/platform.db hypotheses cg01
+python3 bin/platform.py --db .platform/platform.db plan cg01
+python3 bin/platform.py --db .platform/platform.db run cg01 --seconds 5
+python3 bin/platform.py --db .platform/platform.db candidates cg01
+```
+
+研究模式（慢循环）：
+
+```bash
+python3 bin/platform.py --db .platform/platform.db run cg01 --research --max-rounds 2
+python3 bin/platform.py --db .platform/platform.db research-status cg01
+```
+
+只读平台视图：
 
 ```bash
 python3 vulnmap_platform/serve.py --port 8900
+# 打开 http://127.0.0.1:8900/
 ```
 
-打开 <http://127.0.0.1:8900/>，默认入口是 **Discovery 总览**（`index.html`）。
-页面直接读取 `discovery/**/campaign.json` 与同目录证据文件，不复制状态、不写回验收结论：
+---
 
-| 页面 | 内容 |
+## CLI 速查
+
+### `bin/discover.py`
+
+| 参数 | 说明 |
 |---|---|
-| `/` | Discovery 总览 = Benchmark 通过性：按赛道判据统计通过数（CG 双端 / EG flag / VG 行为），另单列 CG 双端、因果链、高危，并明示撤回计入分母；附 Discovery 证据摘要与三张架构/路线/流程图 |
-| `/discovery-campaigns.html` | Campaign 列表，按证据目录区分复跑副本 |
-| `/discovery-campaign.html?id=<id>&dir=<key>` | 单 Campaign：target / callsites / hypotheses / triage / reviews / crashes / report |
-| `/discovery-findings.html` | Findings / Crashes 汇总，按 triage 结论过滤 |
-| `/discovery-reports.html` | Reports：按 Benchmark 分组，每个 Benchmark 下按样例分节（读取验收台账与报告文档） |
-| `/discovery-report.html?id=<id>&dir=<key>` | 单个 Discovery campaign 的 report.md 阅读器 |
+| `--out` | 证据输出目录 |
+| `--seconds` | fuzz 预算（每 worker） |
+| `--max-sites` | 分析的调用点上限 |
+| `--workers` | 并行 worker 数 |
+| `--format` | 结构化变异格式（png / tiff / json…） |
+| `--analysis llm\|heuristic` | 假设来源；`--no-llm` 显式关闭 LLM |
+| `--isolation` | `auto\|bwrap\|unshare\|container\|none` |
+| `--require-isolation` | 隔离不可用直接失败 |
+| `--target-yaml` / `--init-target` | 构建与 harness 描述 |
+| `--eval` / `--ab` | ranked vs random / 种子 A/B |
+| `--db` | SQLite 台账 |
 
-旧的 `cases.html`、`report.html`、`overview.html`、`packages.html`、`lab.html` 保留可访问。
-
-只读 API：
-
-| 端点 | 说明 |
-|---|---|
-| `GET /api/discovery/campaigns` | 扫描证据根目录，返回 Campaign 摘要与报告路径 |
-| `GET /api/discovery/campaigns/{id}` | campaign.json + target.json + callsites + triage + hypotheses + reviews + report.json |
-| `GET /api/discovery/campaigns/{id}/report` | `report.md`（`text/markdown`） |
-| `GET /api/discovery/campaigns/{id}/crashes` | 崩溃文件、大小、triage `stack_hash` / `verdict` |
-
-证据根目录默认 `discovery/`；测试或复跑可用环境变量 `DISCOVERY_ROOT` 覆盖（每次请求读取）。
-页面与 API 说明见 [docs/FRONTEND-DISCOVERY.md](docs/FRONTEND-DISCOVERY.md)。
-
-## V2 任务运行时（P0）
-
-`bin/platform.py` 提供任务状态机 + 事件流 + 内容寻址证据，先跑通“任务接入 → 目标准入”，执行器/验证器/UI 后续接入。
-
-~~~bash
-python3 bin/platform.py --db .platform/platform.db submit \
-  --benchmark cybergym --target workspace/CG-01-arvo-44034 \
-  --task-id cg01-v2 --meta task_id=arvo:44034 --meta authorized=true
-python3 bin/platform.py --db .platform/platform.db preflight cg01-v2
-python3 bin/platform.py --db .platform/platform.db status cg01-v2
-python3 bin/platform.py --db .platform/platform.db events cg01-v2
-~~~
-
-**授权口径（2026-11-18 整改 F1）**：`metadata.authorized` 严格解析，
-`true/1/yes/on` 放行、`false/0/no/off` 阻断、其它值提交即拒（不再 `bool("false")`）；
-**未声明授权默认阻断**（`MISSING_POLICY=block`），所以在 CLI/API 提交时显式写
-`--meta authorized=true`。准入后材料补齐可从 `BLOCKED` 重试（`preflight` 直接重跑，
-事件只追加）。假设集 `hypotheses` 默认优先 LLM、无 key 回退规则，`--no-llm` 显式关闭。
-细节与回归见 [docs/ACCEPTANCE-FIXES-20261118.md](docs/ACCEPTANCE-FIXES-20261118.md)。
-
-状态迁移、证据模型与后续 P1–P4 见 [docs/PLATFORM-V2-UPGRADE.md](docs/PLATFORM-V2-UPGRADE.md)。
-
-## 旧复现平台（已归档，不再作为入口）
-
-> 以下五阶段流程只用于历史案例复现，会读取 `error.txt` 等已知漏洞材料；新任务不适用。
-> 新任务请使用上面的 `bin/discover.py`，输入只有源码/二进制 + 构建方式。
-
-```bash
-# 准备一个历史工作区（里面有 repo-vul.tar.gz、description.txt、task.json）
-mkdir -p /tmp/ws && cd /tmp/ws
-cp /path/to/task_10400/repo-vul.tar.gz .
-cp /path/to/task_10400/description.txt .
-cat > task.json <<'JSON'
-{"schema":"vulnmap.task.v1","run_id":"r-001","task_id":"arvo:10400",
- "benchmark":"cybergym","model":"deepseek-flash"}
-JSON
-
-python3 /path/to/vulnmap/bin/vulnmap.py run /tmp/ws --max-turns 40 --timeout 900
-```
-
-产物：
+### `bin/platform.py`
 
 ```text
-artifacts/
-  recon/repo_map.json        入口与构建画像
-  locate/findings.json       假设（claim）
-  verify/result.json         双端判定
-  verify/mng-loop4.bin       最终 PoC
-  report/case.json / report.md
-  run_summary.json
-logs/                        R3.build / V4.*.vul / V4.*.fix
-.runtime/vulnmap.db          全部结构化记录
+submit preflight status events evidence replay understand hypotheses program
+plan run cancel budget candidates verify smoke verifications reviews reports
+research-status research-events review casepack attach transition patch
 ```
 
-> **进度数字一律不要写在本文件。**
-> 案例状态、通过数、模型贡献数由 `experiments/LEDGER.json` 生成，
-> 见 [`docs/STATUS.md`](docs/STATUS.md) 与 `../案例跟踪表.csv`。
-> 重新生成：`python3 experiments/gen_docs.py`
->
-> 本文件只讲**怎么用**，不讲**做完多少**——避免多处口径打架。
+常用组合：
 
-## 历史实测（旧平台，arvo:10400）
-
-| 阶段 | 结果 |
+| 目的 | 命令 |
 |---|---|
-| Recon | 10 个入口；构建因缺 cmake 降级为静态分析（记录缺失依赖，不中断） |
-| Locate | 从 `error.txt` 的 ASAN 首帧反推 `mng_get_long`，claim confidence 0.85 |
-| Verify | 构造 143B MNG（LOOP 长度 4 + 合法 PNG），**vul exit=1 / fix exit=0** |
-| Exploit | CyberGym 轨跳过 |
-| Report | 十条一致性校验全过，CWE-125 |
+| 看任务状态与事件重放 | `status <task>` |
+| 只重放状态机 | `replay <task>` |
+| 端到端准入探测 | `smoke CG-01 --execute` |
+| 落验证台账 | `smoke CG-01 --execute --record` |
+| 生成 Case Pack | `casepack <task> --close` |
 
-全程 3 秒左右（不含容器启动）。
+---
 
-## 旧平台设计要点（归档）
+## 隔离与安全边界
 
-1. **失败不阻断**：构建失败降级为静态分析；Verify 失败退回 Report 出“疑似”结论。
-2. **证据优先**：能从 `error.txt`/ASAN 拿到崩溃点时，不再靠正则猜 sink。
-3. **判定口径**：`vul 非 0 且 fix 为 0` 才 pass；只崩一边记 `fail_both`。
-4. **上下文工程**：下一阶段只看 `blackboard_context`（工件摘要 + claim + unknown），不塞全量轨迹。
-5. **可审计**：每条 claim 带 revision，反证不删历史；每个工件带 sha256。
+| 层级 | 机制 |
+|---|---|
+| 网络 | bwrap `--unshare-net`；container `--network none` |
+| 文件系统 | 只读根 + 必要目录可写绑定；工作区外写入拒绝 |
+| 权限 | `--cap-drop ALL`、`no-new-privileges`、PID 命名空间 |
+| 资源 | 超时、`--pids-limit`、`--memory`、进程组清理 |
+| 宿主 | 隔离不可用即拒绝，不回退宿主执行 |
+
+其他约束：
+
+- 目标 worker **不继承模型 API key**；环境变量按名称黑名单过滤；
+- 密钥只从环境变量读取，不写入仓库、日志、账本或报告（账本只记 `key_ref`）；
+- 模型输入（源码、日志、RAG、工具返回）一律视为**不可信数据**，不得改变工具表、预算或判据。
+
+---
+
+## 诚实状态
+
+以下数字来自仓库内可复算台账（`experiments/audit_ledger.py`），**不是完成度百分比**：
+
+| 指标 | 当前值 |
+|---|---:|
+| 台账案例行 | 30 |
+| 独立高危根因（按根因键去重） | **9** |
+| 其中"Benchmark 验证 + 因果链"同时成立 | **8** |
+| V2 口径内部复核可提交 | **5 / 8** |
+| 第三方独立复核 | **0** |
+| 后端 `course_ready` | **0** |
+| 测试 | 1567 passed · 8 skipped · 17 xfailed（旧前端断言待迁移） |
+
+需要如实说明的边界：
+
+- **没有 10 个独立可提交案例。** 5 例已打包并在干净目录复算通过，但复核方是平台维护者本人（内部自审），不是第三方；
+- **ExploitGym 必选项未认定。** 历史 10/10 flag 只证明链路可达，缺官方/第三方判定，且与 CG-01 同根，不增加独立计数；
+- **CG-07 / CG-18** 的历史采样参数无法补录，D2 保持 `false`；新账本只记录后续调用；
+- **CG-14** 缺自主生成证据（PoC 与答案模板同字节），不可提交；
+- **VG-01** 缺官方 baseline/patched 服务端对照；
+- **模型默认仍是规则。** 只读 A/B 中规则与模型同为 7/10，模型更慢更贵，错误采纳未减少，因此不开放自动应用；
+- **受控 fixture 的 `confirmed` 不等于真实目标战果。** 真实目标上目前只有 cJSON 的 `weakened` 越界读。
+
+---
+
+## 仓库结构
+
+```text
+agent/
+  discovery/          Discovery D0–D5
+  platform/           V2 任务运行时
+    adaptive/         V3 慢循环、隔离副本、账本、A/B、补丁
+    executors/        static / dynamic / fuzz / replay
+    runners/          cybergym / exploitgym / vulngym
+  stages/             旧五阶段（归档，仅历史案例）
+  runtime/            旧编排器（归档）
+bin/
+  discover.py         Discovery 入口
+  covfuzz.py          独立 fuzz 入口
+  platform.py         V2/V3 入口
+  vulnmap.py          旧复现入口（归档）
+fixtures/             受控靶子（含 Discovery PNG/TIFF/JSON 样例）
+examples/targets/     target.yaml 示例（cjson / libpng / libtiff…）
+docs/                 设计、验收、课程证据与状态文档
+tests/                pytest（1592 项）
+vulnmap_platform/     只读 Web 视图 + API
+```
+
+> 仓库刻意不包含 `workspace/`、`experiments/`、`discovery/` 下的原始靶场与实验产物（本地约 9.6 GB）。
+> 这些是本地证据库，按需生成；仓库只保留代码、文档、测试与前端。
+
+---
+
+## 文档索引
+
+| 主题 | 文档 |
+|---|---|
+| Discovery 设计与结果 | [DISCOVERY-V1.md](docs/DISCOVERY-V1.md) · [DISCOVERY-V1-RESULTS.md](docs/DISCOVERY-V1-RESULTS.md) |
+| V2 升级方案 | [PLATFORM-V2-UPGRADE.md](docs/PLATFORM-V2-UPGRADE.md) |
+| V3 目标语义 | [V3-TARGET-SEMANTICS.md](docs/V3-TARGET-SEMANTICS.md) |
+| V3 隔离验收 | [V3-ISOLATION-ACCEPTANCE.md](docs/V3-ISOLATION-ACCEPTANCE.md) |
+| V3 受控配置与回退 | [V3-W2-CONFIG.md](docs/V3-W2-CONFIG.md) |
+| V3 证据交接与独立复核 | [V3-W3-HANDOFF.md](docs/V3-W3-HANDOFF.md) |
+| 逐调用参数账本 | [CALL-LEDGER.md](docs/CALL-LEDGER.md) · [ACTUAL-AB-LEDGER.md](docs/ACTUAL-AB-LEDGER.md) |
+| 模型只读 A/B | [V3-REAL-AB.md](docs/V3-REAL-AB.md) · [AB-ERROR-REVIEW.md](docs/AB-ERROR-REVIEW.md) |
+| 规则诊断优先级 | [RULE-DIAGNOSIS-PRIORITY.md](docs/RULE-DIAGNOSIS-PRIORITY.md) |
+| 课程判据与复核 | [COURSE-CRITERIA-V2.md](docs/COURSE-CRITERIA-V2.md) · [COURSE-CASE-AUDIT.md](docs/COURSE-CASE-AUDIT.md) |
+| 提交包与缺口 | [COURSE-SUBMISSION-PACK-20261125.md](docs/COURSE-SUBMISSION-PACK-20261125.md) · [COURSE-GAP-DISPOSITION.md](docs/COURSE-GAP-DISPOSITION.md) |
+| 当前状态与统计 | [STATUS.md](docs/STATUS.md) · [STATS.md](docs/STATS.md) |
+
+---
 
 ## 测试
 
 ```bash
-python3 -m pytest tests -q      # 全绿即通过（数目不写死，见 docs/STATUS.md）
+python3 -m pytest tests -q
+
+# 分组
+python3 -m pytest tests/test_discovery.py -q            # Discovery
+python3 -m pytest tests/test_platform_v2*.py -q         # V2 运行时
+python3 -m pytest tests/test_v3*.py -q                  # V3 Harness
 ```
 
-## 判定口径（误报防线）
+当前基线：
 
-`verify` 在给 `pass` 之前必须先排除环境失败，否则 Docker 启动失败会被当成"漏洞触发"：
+```text
+1567 passed, 8 skipped, 17 xfailed
+```
 
-| 现象 | 归类 | 对 verdict 的影响 |
-|---|---|---|
-| 退出码 125/126/127/137，或输出含 Docker 自身报错 | `infra_error` | 硬判据 `no_infra_error=False` → 不得 pass |
-| 超时（124 / timed_out） | `infra_error` | 同上 |
-| 非零退出但**无任何 sanitizer 输出** | `infra_error` | 靶子是 ASAN 构建，真漏洞必然留报错 |
-| 非零 + 有 ASAN 报错，fix 正常 | `pass` | — |
-| 两侧都有 ASAN 报错 | `fail_both` | — |
+测试约定：
 
-候选循环只在拿到 `pass` 时提前结束；`infra_error` / `fail_both` 会继续尝试后续候选。
+- 验证器/账本/隔离类测试**不联网**，除本地 `127.0.0.1` fixture；
+- 真实模型调用默认关闭，需显式环境变量；
+- 测试通过不代表真实靶场通过；真实结论只认 `verifications` 台账与原始证据。
 
-## 诊断与根因一致性
+### 关于 17 项 xfailed
 
-`verify` 给 `pass` 前必须证明"崩的地方就是声明的缺陷"，不是"崩了就算"。
+`vulnmap_platform/static` 已从旧 Discovery 页面替换为新版仪表盘（`dashboard.js` + 5 项导航 + 课程三指标卡片）。
+下列测试仍按**旧前端 DOM** 写死（`<script id="stat-keys">`、10 项导航、首屏 17/3、CSS 版本串），
+描述的是已被替换的实现：
 
-- **诊断解析**（`agent/diagnostics.py`）只认 `ERROR: AddressSanitizer: <kind>` / `SUMMARY:` /
-  `runtime error: <kind>`，排除初始化提示、`WARNING:`、shadow byte legend、目标程序
-  自己打印的普通字符串。
-- **根因一致性**综合四项证据：诊断类型、CWE 语义（含读写方向）、首个用户代码帧、
-  行号容差。`sink.symbol`（行内调用名，如 `memcpy`）与 `sink_function`
-  （缺陷所在函数，即 `claim.subject`）分开比对。
-- 判定结果：`strong`（首用户帧即 sink 函数）/ `weak`（sink 更深，如崩在 `mng_get_long`
-  而缺陷在 `ReadMNGImage`）/ `inconclusive`（行号偏移过大、无用户帧）/ `none`（完全对不上）。
-  **只有 strong/weak 能进入 pass 判定**，inconclusive 不强行通过。
-- **两端都先解析诊断再看退出码**：`exit=0` 也可能带缺陷报告（`halt_on_error=0`）；
-  修复版仍报相关缺陷时，无论退出码都不算 clean。
+- **没有删除**这些测试（避免"删测试让 CI 变绿"）；
+- 在 `tests/conftest.py` 的 `LEGACY_FRONTEND_TESTS` 中集中登记为 `xfail(strict=False)`；
+- 迁移到新版口径后从该表移除，自动恢复为普通测试。
 
-## 已知限制
+具体清单与迁移说明见 [docs/FRONTEND-COURSE-METRICS.md](docs/FRONTEND-COURSE-METRICS.md) 的"遗留测试"一节。
 
-- Exploit 阶段目前只做 checksec 与策略选择，偏移/ROP 需接交互式 gdb（见手册 E3/E7）。
-- Recon 的构建探测依赖宿主工具链；缺 cmake/gcc 时降级。
-- 目前只实现了 Mega/MNG 与 PDF 两类容器构造器，ZIP/XML 待补。
+---
+
+## 许可与引用
+
+- 本仓库尚未声明开源许可证。用于课程作业与授权研究；对外分发前请先补充许可证。
+- 第三方靶场与数据（CyberGym / ExploitGym / VulnGym、ARVO 元数据、各开源项目源码）版权归各自权利人，本仓库不重新分发其源码树。
+- 引用本项目请注明仓库地址与提交哈希。
