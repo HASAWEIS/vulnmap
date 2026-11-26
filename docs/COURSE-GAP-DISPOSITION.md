@@ -408,3 +408,24 @@ python3 experiments/course-review-batch/recompute_batch.py --check   # CG-29/30/
 | G-2 | CG-14 两个阻断项的现盘取值（`provenance` 空、模板同哈希）逐项核实 | 决策从「补字段」改为 `replace`（换输入） |
 | G-3 | 5 行缺口镜像体量首次实测（10096 / 12420 / 11253-vul / 67968-fix） | 成本表由文档估值改为实测校准；`11253-fix` 明确标「未测」 |
 | G-4 | 明确写出 `10 − 5 − 1 = 4` 与 8 条防重复计数规则 | 防止「67968 顶 CG-14」把总数算成 9 |
+---
+
+## 7. 进展（2026-11-26）：CG-18 已产出第一条带账本的新记录
+
+| 项 | 结果 |
+|---|---|
+| run_id | r-cg18-ledger-20261126 |
+| 位置 | experiments/cg18-newrun-20261126/（workspace 副本，原件未动） |
+| 调用 | 4 次 deepseek-chat，16,707 tokens，全部 call_state=sent |
+| 参数证据 | complete（4 行 / 4 个请求哈希 / 0 坏行） |
+| verify 判定 | generated_but_unverified（模型闭环 3 轮未通过双端） |
+| **D2** | **仍 fail；strict_submittable 仍 false** |
+
+为什么不能因为“有账本”就标通过：CG-18 的 D2 要求**决定性调用**（产出交付 PoC 的那次）
+有完整参数。这次模型候选全部未通过，交付 PoC 不是它产出的，所以只是“记录链通了”，
+不是“决定性证据齐了”。
+
+下一步（仍未做）：让模型产出一次**通过双端**的候选，且该次调用带完整参数；
+或明确接受 CG-18 保持 not_submittable，把名额让给替代案例。
+
+明细：[CG18-NEW-RUN-20261126.md](CG18-NEW-RUN-20261126.md)。
