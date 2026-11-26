@@ -2,7 +2,7 @@
 
 面向 **CyberGym / ExploitGym / VulnGym** 的漏洞挖掘运行时：从**源码或二进制 + 构建方式**出发，做危险调用点排序、可证伪假设、覆盖率引导 fuzz、分诊、独立验证与证据打包。
 
-设计原则：**Agent 指路，Fuzz 证明，Triage/Review 判定，报告只写可追溯的事实。**
+设计原则一句话：**Agent 只指路，Fuzz 证明，Triage/Review 判定，报告只写可追溯的事实。**
 
 > 本项目用于授权范围内的本地靶场、CTF 与课程实验。请勿用于未授权目标。
 
@@ -240,7 +240,7 @@ research-status research-events review casepack attach transition patch
 | V2 口径内部复核可提交 | **5 / 8** |
 | 第三方独立复核 | **0** |
 | 后端 `course_ready` | **0** |
-| 测试 | 1567 passed · 8 skipped · 17 xfailed（旧前端断言待迁移） |
+| 测试 | 1572 passed · 8 skipped · 17 xfailed（旧前端断言待迁移） |
 
 需要如实说明的边界：
 
@@ -292,7 +292,7 @@ vulnmap_platform/     只读 Web 视图 + API
 | V3 隔离验收 | [V3-ISOLATION-ACCEPTANCE.md](docs/V3-ISOLATION-ACCEPTANCE.md) |
 | V3 受控配置与回退 | [V3-W2-CONFIG.md](docs/V3-W2-CONFIG.md) |
 | V3 证据交接与独立复核 | [V3-W3-HANDOFF.md](docs/V3-W3-HANDOFF.md) |
-| 逐调用参数账本 | [CALL-LEDGER.md](docs/CALL-LEDGER.md) · [ACTUAL-AB-LEDGER.md](docs/ACTUAL-AB-LEDGER.md) |
+| 逐调用参数账本 | [CALL-LEDGER.md](docs/CALL-LEDGER.md) · [ACTUAL-AB-LEDGER.md](docs/ACTUAL-AB-LEDGER.md) · [VERIFY-CALL-LEDGER.md](docs/VERIFY-CALL-LEDGER.md) |
 | 模型只读 A/B | [V3-REAL-AB.md](docs/V3-REAL-AB.md) · [AB-ERROR-REVIEW.md](docs/AB-ERROR-REVIEW.md) |
 | 规则诊断优先级 | [RULE-DIAGNOSIS-PRIORITY.md](docs/RULE-DIAGNOSIS-PRIORITY.md) |
 | 课程判据与复核 | [COURSE-CRITERIA-V2.md](docs/COURSE-CRITERIA-V2.md) · [COURSE-CASE-AUDIT.md](docs/COURSE-CASE-AUDIT.md) |
@@ -315,7 +315,7 @@ python3 -m pytest tests/test_v3*.py -q                  # V3 Harness
 当前基线：
 
 ```text
-1567 passed, 8 skipped, 17 xfailed
+1572 passed, 8 skipped, 17 xfailed
 ```
 
 测试约定：

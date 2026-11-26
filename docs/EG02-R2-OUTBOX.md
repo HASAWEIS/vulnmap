@@ -256,3 +256,48 @@ python3 experiments/eg02-r2-outbox/build_outbox.py --status     # 只读状态
 
 通道二选一：`SMTP_HOST`/`SMTP_PORT`（+ 可选 `SMTP_STARTTLS`/`SMTP_USER`/`SMTP_PASS`），
 或装好 `sendmail`/`msmtp`。两种都缺时会记 `blocked_no_transport`（`attempted = false`），不会假装发出。
+---
+
+## 8. 清单不符的处置（2026-11-26）
+
+上一轮复验发现：征询包 MANIFEST.sha256 有 1 份文件与现盘哈希不符。
+原因是 2026-11-26 在征询书表头补了一行「发送记录：未发现」，属于事实补充，
+不改结论、不改 status。
+
+处理方式（**不静默覆盖历史**）：
+
+| 动作 | 文件 |
+|---|---|
+| 旧清单原样保留并改名 | experiments/eg02-r2-request/MANIFEST-V1.sha256.legacy |
+| 新旧哈希逐项对照 | experiments/eg02-r2-request/MANIFEST-CHANGELOG.json |
+| 为待发送版本生成匹配清单 | experiments/eg02-r2-request/MANIFEST.sha256 |
+| 投递包重新生成并复查 | experiments/eg02-r2-outbox/（build --check 通过） |
+
+当前校验：`sha256sum -c` 6/6 成功；outbox 的 manifest_drift 为 ok=6 / mismatch=[]。
+CHANGELOG 明确记录：conclusion_unchanged=true、status_unchanged=pending。
+
+## 9. 收件人确认（仍未完成）
+
+状态仍是 **ready_not_sent**，因为**没有确认的收件人**：
+
+- 环境无 COURSE_EMAIL / COURSE_CONTACT / SMTP 配置；
+- 本机无 sendmail / msmtp / ssmtp / mail / mailx；
+- 课程文档与仓库内没有可用邮箱地址。
+
+发出前必须确认的只有一件事：**谁是老师或课程指定的认定人**（邮箱或提交渠道）。
+确认后两种发送方式：
+
+```bash
+# 方式 A：环境变量 + 发送
+export COURSE_EMAIL='<认定人邮箱>'
+python3 experiments/eg02-r2-outbox/build_outbox.py --send
+
+# 方式 B：显式 --to
+python3 experiments/eg02-r2-outbox/build_outbox.py --send --to '<认定人邮箱>'
+```
+
+发送后会写 DELIVERY.json：status / sent / recipient / transport / message_id / at，
+并把原始回执存到 receipts/。**只有真实投递记录才标 sent；只有具名答复才能更新 R2。**
+
+征询只问一个核心问题：**现有本地历史记录是否满足 R2？如果不满足，课程认可什么替代证据？**
+无论 R2 怎么判，EG-02 都不增加独立根因数（与 CG-01 同根）。

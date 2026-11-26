@@ -346,7 +346,15 @@ class Stage:
                     return StageResult(stage=self.name, status="completed", data=data,
                                        usage={"seconds": 0.0, "reused": True})
                 self.store.set_stage(self.run_id, self.name, "running")
-                data = self.execute()
+                # 逐调用账本的关联键：本次 run + 当前阶段。
+                # 只有在这里绑定，(run_id, call_id) 才能和轨迹/证据索引对齐。
+                from .. import llm as llm_mod
+                _run_token = llm_mod.set_run_context(
+                    self.run_id, self.name, workspace=str(self.ws))
+                try:
+                    data = self.execute()
+                finally:
+                    llm_mod.reset_run_context(_run_token)
                 audit = self._audit_sealed()
                 if isinstance(data, dict):
                     data["_isolation_audit"] = audit

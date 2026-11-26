@@ -2003,6 +2003,8 @@ class VerifyStage(Stage):
                 seed_block=seed_block, seeds=seeds, contract=contract,
                 log=lambda msg: self.store.add_blackboard(
                     self.run_id, "action", "模型闭环", msg, status="ok"))
+            # 参数证据：只报告账本是否完整，**不参与漏洞判定**。
+            result["param_evidence"] = self._param_evidence(len(result.get("rounds") or []))
             result["format"] = fmt
             result["claim_subject"] = claim.get("subject", "")
             result["harness_contract"] = contract
@@ -2027,6 +2029,35 @@ class VerifyStage(Stage):
             return result
         except Exception as exc:
             return {"rounds": [], "error": f"{type(exc).__name__}: {exc}"}
+
+
+    def _param_evidence(self, loop_rounds: int) -> dict:
+        """参数证据完整性：只读账本，**不改判据、不改 verdict**。
+
+        口径（对应课程要求）：
+        - not_recorded：账本未启用——明确写"没有记录"，不写成"证据齐全"；
+        - incomplete：启用了但缺行/缺请求哈希/写盘失败/决定性调用找不到记录；
+        - complete：有行、有请求哈希、无坏行、且模型闭环确实发生过调用。
+        缺证据只让报告写"参数证据不完整"，不让 verify 变 fail。
+        """
+        from .. import llm as llm_mod
+        summary = llm_mod.ledger_summary(self.run_id, self.name)
+        calls = int(summary.get("sent") or 0) + int(summary.get("refused") or 0)
+        status = str(summary.get("status") or "not_recorded")
+        reason = str(summary.get("reason") or "")
+        if status == "complete" and int(loop_rounds) > 0 and calls <= 0:
+            status, reason = "incomplete", "decisive_calls_without_ledger_rows"
+        if status == "complete" and int(summary.get("failed_writes") or 0) > 0:
+            status, reason = "incomplete", "ledger_write_failed"
+        return {"status": status, "reason": reason,
+                "call_key_prefix": "%s::" % self.run_id,
+                "ledger_enabled": bool(summary.get("enabled")),
+                "rows": int(summary.get("rows") or 0),
+                "sent": int(summary.get("sent") or 0),
+                "refused": int(summary.get("refused") or 0),
+                "with_request_hash": int(summary.get("with_request_hash") or 0),
+                "loop_rounds": int(loop_rounds),
+                "note": "参数证据只描述可追溯性，不改变漏洞判定"}
 
     def _llm_config(self):
         from .. import llm as llm_mod
