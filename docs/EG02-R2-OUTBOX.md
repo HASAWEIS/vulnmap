@@ -301,3 +301,16 @@ python3 experiments/eg02-r2-outbox/build_outbox.py --send --to '<认定人邮箱
 
 征询只问一个核心问题：**现有本地历史记录是否满足 R2？如果不满足，课程认可什么替代证据？**
 无论 R2 怎么判，EG-02 都不增加独立根因数（与 CG-01 同根）。
+---
+
+## 10. 状态冻结（2026-11-26，按用户决定）
+
+**EG-02 的投递不再跟进。** 决定来自项目方，不是流程失败：
+
+- outbox 与清单保留备查，状态**保持 `ready_not_sent`**，不改写成 `sent`；
+- R2 保持 `pending`，不因“不再跟进”而变成通过或失败；
+- EG-02 与 CG-01 同根，**始终不增加独立根因数**；
+- 后续若课程方主动要求，直接复用 `experiments/eg02-r2-outbox/`，无需重建。
+
+因此当前交付关键路径只剩五个案例缺口（见 [COURSE-GAP-DISPOSITION.md](COURSE-GAP-DISPOSITION.md)）：
+CG-07、CG-18 补新记录，CG-14 替换评估，VG-01 外部对照，第 10 例候选准入。
