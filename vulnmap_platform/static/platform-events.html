@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>事件流 · vulnmap</title>
+<link rel="stylesheet" href="style.css?v=202611171640">
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar" id="sidebar"></aside>
+  <div class="main">
+    <header class="tophead" id="tophead"></header>
+    <div class="content" id="content"><div class="loading">正在读取事件流…</div></div>
+  </div>
+</div>
+<script src="app.js?v=202611171640"></script>
+<script>
+const TID = new URLSearchParams(location.search).get('task_id') || '';
+renderShell('platform-tasks', {
+  title: '事件流',
+  sub: 'append-only EventBus：每条迁移/执行/出包事件都可查询、可重放；页面只读，实时跟随走服务端推送。'
+});
+
+let EVENTS = [], FILTER = '', LAST = 0, STATE = '';
+// 实时跟随（EventSource）：默认开，可手动关掉退回纯手动增量拉取
+let ES = null, FOLLOW = true, STREAM_NOTE = '未连接', STREAM_ERRORS = 0, STREAM_CLOSED = false;
+
+function matches(ev) {
+  if (!FILTER) return true;
+  const hay = [ev.event_type, ev.stage, ev.ts, JSON.stringify(ev.payload || {})]
+    .join(' ').toLowerCase();
+  return hay.includes(FILTER);
+}
+
+function rowsHTML() {
+  const items = EVENTS.filter(matches);
+  if (!items.length) {
+    return `<tr><td colspan="5"><div class="empty">${EVENTS.length ? '没有匹配的事件' : '还没有事件'}</div></td></tr>`;
+  }
+  return items.map(ev => `<tr>
+    <td class="mono">${esc(ev.seq)}</td>
+    <td class="mono">${esc(ev.ts)}</td>
+    <td class="mono">${esc(ev.event_type)}</td>
+    <td>${ev.stage ? stateBadge(ev.stage) : '—'}</td>
+    <td><details><summary class="mono">payload ${esc(payloadSize(ev.payload))}</summary>
+      <pre class="pf-pre inline">${esc(JSON.stringify(ev.payload || {}, null, 2))}</pre></details></td>
+  </tr>`).join('');
+}
+
+function payloadSize(p) {
+  try { return (JSON.stringify(p || {}).length + ' B'); } catch (e) { return '—'; }
+}
+
+function paint() {
+  $('#ev-rows').innerHTML = rowsHTML();
+  $('#ev-count').textContent = EVENTS.filter(matches).length;
+  $('#ev-last').textContent = LAST;
+  $('#ev-state').innerHTML = STATE ? stateBadge(STATE) : '';
+  setStreamNote(STREAM_NOTE);
+}
+
+/* ══════════════════════ 实时跟随（服务端推送） ══════════════════════ */
+
+function setStreamNote(txt) {
+  STREAM_NOTE = txt;
+  const el = $('#ev-stream');
+  if (el) el.textContent = txt;
+}
+function parseData(ev) { try { return JSON.parse(ev.data || '{}'); } catch (e) { return null; } }
+
+function closeStream() {
+  if (ES) { try { ES.close(); } catch (e) {} ES = null; }
+  STREAM_CLOSED = true;
+}
+
+function openStream() {
+  closeStream();
+  if (!TID) return;
+  if (typeof EventSource === 'undefined') { setStreamNote('浏览器不支持推送'); return; }
+  STREAM_CLOSED = false;
+  STREAM_ERRORS = 0;
+  let es;
+  try {
+    es = new EventSource('/api/platform/tasks/' + encodeURIComponent(TID) + '/stream?after=' + LAST);
+  } catch (e) { setStreamNote('推送不可用：' + e.message); return; }
+  ES = es;
+  setStreamNote('连接中…');
+  es.addEventListener('hello', () => { STREAM_ERRORS = 0; setStreamNote('跟随中（在线）'); });
+  es.addEventListener('ping', () => { STREAM_ERRORS = 0; setStreamNote('跟随中（在线）'); });
+  es.addEventListener('task_event', ev => {
+    const d = parseData(ev);
+    if (!d || d.seq == null) return;
+    if (!EVENTS.some(e => e.seq === d.seq)) EVENTS.push(d);
+    LAST = Math.max(LAST, Number(d.seq) || 0);
+    paint();
+  });
+  es.addEventListener('state', ev => {
+    const d = parseData(ev);
+    if (!d) return;
+    if (d.state) STATE = d.state;
+    paint();
+  });
+  es.addEventListener('end', ev => {
+    const d = parseData(ev) || {};
+    const reason = d.reason || 'unknown';
+    closeStream();
+    setStreamNote('推送结束：' + reason);
+    if (reason === 'terminal') loadAll().then(() => setStreamNote('推送结束：terminal')).catch(() => {});
+  });
+  es.onerror = () => {
+    if (STREAM_CLOSED) return;
+    STREAM_ERRORS += 1;
+    setStreamNote(STREAM_ERRORS > 2 ? '推送暂不可用（可重连）' : '连接中断，正在重试…');
+    if (STREAM_ERRORS > 2) closeStream();
+  };
+}
+
+function toggleFollow(on) {
+  FOLLOW = !!on;
+  if (FOLLOW) openStream(); else closeStream();
+  setStreamNote(FOLLOW ? STREAM_NOTE : '已暂停跟随');
+}
+window.toggleFollow = toggleFollow;
+
+function render(task, events) {
+  $('#content').innerHTML = `
+    <section class="panel cases-panel" style="margin-bottom:20px">
+      <div class="panel-hd"><div><h2>事件流 · <span class="mono">${esc(TID)}</span> ${stateBadge(task.state)}</h2>
+        <p>状态迁移历史只在这里：TaskState 只存当前阶段，历史靠事件流重放。</p></div>
+        <a class="pf-btn" href="${taskHref('platform-task.html', TID)}">任务详情 ${icon('arrow')}</a></div>
+      ${taskNav(TID, 'platform-events.html')}
+      <div class="pf-status">事件总数 <span class="mono">${esc(events.total || events.count || 0)}</span>
+        · 已加载 <span class="mono" id="ev-count">0</span>
+        · 最新 seq <span class="mono" id="ev-last">0</span>
+        · 重放状态 <span id="ev-state"></span>
+        · 实时 <span class="pf-job-chip" id="ev-stream">未连接</span></div>
+      <div class="case-tools">
+        <div class="pf-row-actions">
+          <button class="pf-btn" type="button" onclick="loadAll()">全量刷新</button>
+          <button class="pf-btn primary" type="button" onclick="loadMore()">增量拉取（after=最新 seq）</button>
+          <label class="pf-job-toggle"><input type="checkbox" id="ev-follow" checked> 实时跟随</label>
+          <button class="pf-btn" type="button" onclick="reconnect()">重连</button>
+        </div>
+        <div class="case-search">${icon('search')}
+          <input id="ev-filter" type="search" placeholder="过滤事件类型 / stage / payload…" aria-label="过滤事件"></div>
+      </div>
+      <div class="tw" role="region" aria-label="事件流" tabindex="0">
+        <table class="overview-table"><thead><tr>
+          <th scope="col">seq</th><th scope="col">时间</th><th scope="col">事件</th>
+          <th scope="col">stage</th><th scope="col">payload</th>
+        </tr></thead><tbody id="ev-rows"></tbody></table>
+      </div>
+      <div class="table-footer"><span>只读 · append-only · 增量拉取使用序列号 after=，不会重写历史</span>
+        <span class="scope-link">GET /api/platform/tasks/{id}/events?after=</span></div>
+    </section>`;
+  $('#ev-filter').oninput = e => { FILTER = e.target.value.trim().toLowerCase(); paint(); };
+  const follow = $('#ev-follow');
+  if (follow) { follow.checked = FOLLOW; follow.onchange = e => toggleFollow(e.target.checked); }
+  paint();
+}
+
+function reconnect() { closeStream(); STREAM_CLOSED = false; openStream(); }
+window.reconnect = reconnect;
+
+async function loadAll() {
+  const detail = await api('/api/platform/tasks/' + encodeURIComponent(TID));
+  const d = await api('/api/platform/tasks/' + encodeURIComponent(TID) + '/events?after=0');
+  EVENTS = d.items || [];
+  LAST = d.next_after || 0;
+  STATE = detail.state;
+  render(detail.task, d);
+}
+
+async function loadMore() {
+  const d = await api('/api/platform/tasks/' + encodeURIComponent(TID) + '/events?after=' + LAST);
+  const known = new Set(EVENTS.map(e => e.seq));
+  for (const ev of (d.items || [])) if (!known.has(ev.seq)) EVENTS.push(ev);
+  LAST = d.next_after || LAST;
+  paint();
+  if (!(d.items || []).length) alert('没有新事件（after=' + LAST + '）');
+}
+
+async function start() {
+  if (!TID) {
+    try {
+      const d = await api('/api/platform/tasks?limit=200');
+      $('#content').innerHTML = `<section class="panel cases-panel"><div class="panel-hd"><div><h2>选择任务查看事件流</h2>
+        <p>事件流按 task_id 读取；从下面的列表进入。</p></div>
+        <a class="pf-btn" href="platform-tasks.html">V2 任务 ${icon('arrow')}</a></div>
+        ${taskPicker(d.items || [], '还没有任务，先去「V2 任务」页提交一个。')}</section>`;
+    } catch (e) { fail($('#content'), e); }
+    return;
+  }
+  try {
+    await loadAll();
+    if (FOLLOW) openStream();
+  } catch (e) {
+    $('#content').innerHTML = `<div class="error" role="alert"><b>任务不存在或事件不可读</b>
+      <p>${esc(e.message)}（task_id=${esc(TID)}）</p><a class="pf-btn" href="platform-tasks.html">返回任务列表</a></div>`;
+  }
+}
+window.loadAll = loadAll; window.loadMore = loadMore;
+window.addEventListener('beforeunload', closeStream);
+start();
+</script>
+</body>
+</html>

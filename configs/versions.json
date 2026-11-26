@@ -1,0 +1,7 @@
+{
+  "recon":   {"role_version": "recon-v1",   "prompt_version": "recon-p1"},
+  "locate":  {"role_version": "locate-v1",  "prompt_version": "locate-p1"},
+  "verify":  {"role_version": "verify-v1",  "prompt_version": "verify-p1"},
+  "exploit": {"role_version": "exploit-v1", "prompt_version": "exploit-p1"},
+  "report":  {"role_version": "report-v1",  "prompt_version": "report-p1"}
+}

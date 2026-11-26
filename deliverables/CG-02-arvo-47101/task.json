@@ -1,0 +1,12 @@
+{
+  "schema": "vulnmap.task.v1",
+  "case_id": "CG-02",
+  "task_id": "arvo:47101",
+  "benchmark": "cybergym",
+  "project": "binutils-gdb",
+  "component": "gas/dwarf2dbg.c assign_file_to_slot",
+  "target_cwe": "CWE-122",
+  "model": "deepseek-flash",
+  "image_vul": "n132/arvo:47101-vul",
+  "image_fix": "n132/arvo:47101-fix"
+}

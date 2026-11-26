@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>证据浏览器 · vulnmap</title>
+<link rel="stylesheet" href="style.css?v=202611161150">
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar" id="sidebar"></aside>
+  <div class="main">
+    <header class="tophead" id="tophead"></header>
+    <div class="content" id="content"><div class="loading">正在读取证据清单…</div></div>
+  </div>
+</div>
+<script src="app.js?v=202611161130"></script>
+<script>
+const TID = new URLSearchParams(location.search).get('task_id') || '';
+renderShell('platform-tasks', {
+  title: '证据浏览器',
+  sub: '内容寻址证据：按 sha256 定位 blob、现场复算哈希；页面只读下载，不写证据。'
+});
+
+let ALL = [], FILTER = '';
+
+const short = (s, n = 20) => s ? String(s).slice(0, n) : '—';
+const size = n => n >= 1048576 ? (n / 1048576).toFixed(1) + ' MiB'
+  : n >= 1024 ? (n / 1024).toFixed(1) + ' KiB' : (n || 0) + ' B';
+
+function matches(e) {
+  if (!FILTER) return true;
+  return [e.kind, e.source_stage, e.sha256].join(' ').toLowerCase().includes(FILTER);
+}
+
+function rows() {
+  const items = ALL.filter(matches);
+  if (!items.length) return `<tr><td colspan="7"><div class="empty">${ALL.length ? '没有匹配的证据' : '该任务还没有登记证据'}</div></td></tr>`;
+  return items.map(e => `<tr>
+    <td>${badge(e.kind || '—', 'b-info')}</td>
+    <td class="mono" title="${esc(e.sha256)}">${esc(short(e.sha256, 16))}</td>
+    <td class="mono">${esc(size(e.size))}</td>
+    <td class="mono">${esc(e.source_stage || '—')}</td>
+    <td>${e.present ? badge('在盘', 'b-ok') : badge('缺失', 'b-bad')}
+        ${e.hash_ok ? badge('哈希 OK', 'b-ok') : badge('哈希不符', 'b-warn')}</td>
+    <td class="mono">${esc(e.created_at || '—')}</td>
+    <td>${e.present ? `<a class="pf-btn" href="${esc(e.download)}" download="${esc(e.sha256)}">下载</a>` : '—'}</td>
+  </tr>`).join('');
+}
+
+function paint() {
+  $('#ev-rows').innerHTML = rows();
+  $('#ev-count').textContent = ALL.filter(matches).length;
+}
+
+function render(d) {
+  const present = d.items.filter(i => i.present).length;
+  const ok = d.items.filter(i => i.hash_ok).length;
+  $('#content').innerHTML = `
+    <section class="panel cases-panel" style="margin-bottom:20px">
+      <div class="panel-hd"><div><h2>证据 · <span class="mono">${esc(TID)}</span></h2>
+        <p>原始文件留在内容寻址 store：<code class="mono">evidence/&lt;sha256&gt;</code>；候选/验证只引用哈希。</p></div>
+        <a class="pf-btn" href="${taskHref('platform-task.html', TID)}">任务详情 ${icon('arrow')}</a></div>
+      ${taskNav(TID, 'platform-evidence.html')}
+      <div class="pf-kpis">
+        <div class="pf-kpi"><span>条目</span><b>${esc(d.count)}</b><span>task_evidence</span></div>
+        <div class="pf-kpi"><span>在盘</span><b>${esc(present)}</b><span>blob 可读</span></div>
+        <div class="pf-kpi"><span>哈希可复算</span><b>${esc(ok)}</b><span>sha256 现场重算</span></div>
+        <div class="pf-kpi"><span>完整性</span><b>${d.all_hash_ok ? 'OK' : 'CHECK'}</b><span>all_hash_ok=${esc(d.all_hash_ok)}</span></div>
+      </div>
+      <div class="case-tools">
+        <div class="pf-hint">下载走 <code class="mono">GET /api/platform/tasks/{id}/evidence/{sha256}</code>；只允许该任务登记过的哈希。</div>
+        <div class="case-search">${icon('search')}
+          <input id="ev-filter" type="search" placeholder="按 kind / stage / sha 过滤…" aria-label="过滤证据"></div>
+      </div>
+      <div class="tw" role="region" aria-label="证据清单" tabindex="0">
+        <table class="overview-table"><thead><tr>
+          <th scope="col">kind</th><th scope="col">sha256</th><th scope="col">大小</th>
+          <th scope="col">来源阶段</th><th scope="col">完整性</th><th scope="col">登记时间</th>
+          <th scope="col">blob</th>
+        </tr></thead><tbody id="ev-rows"></tbody></table>
+      </div>
+      <div class="table-footer"><span>只读 · 已加载 <span id="ev-count">0</span> 条</span>
+        <span class="scope-link">hash_ok 由页面请求时现场重算，不信任库里的记录</span></div>
+    </section>`;
+  $('#ev-filter').oninput = e => { FILTER = e.target.value.trim().toLowerCase(); paint(); };
+  paint();
+}
+
+async function start() {
+  if (!TID) {
+    try {
+      const d = await api('/api/platform/tasks?limit=200');
+      $('#content').innerHTML = `<section class="panel cases-panel"><div class="panel-hd"><div><h2>选择任务查看证据</h2>
+        <p>证据清单按 task_id 读取；从下面的列表进入。</p></div>
+        <a class="pf-btn" href="platform-tasks.html">V2 任务 ${icon('arrow')}</a></div>
+        ${taskPicker(d.items || [], '还没有任务，先去「V2 任务」页提交一个。')}</section>`;
+    } catch (e) { fail($('#content'), e); }
+    return;
+  }
+  try {
+    const d = await api('/api/platform/tasks/' + encodeURIComponent(TID) + '/evidence');
+    ALL = d.items || [];
+    render(d);
+  } catch (e) {
+    $('#content').innerHTML = `<div class="error" role="alert"><b>任务不存在或证据不可读</b>
+      <p>${esc(e.message)}（task_id=${esc(TID)}）</p><a class="pf-btn" href="platform-tasks.html">返回任务列表</a></div>`;
+  }
+}
+start();
+</script>
+</body>
+</html>

@@ -1,0 +1,181 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="2400" height="1810" viewBox="0 0 2400 1810" role="img" aria-labelledby="diagram-title diagram-desc">
+<title id="diagram-title">Discovery v1.0 漏洞发现流程与节点工具</title>
+<desc id="diagram-desc">源码与构建描述进入静态扫描、默认 LLM 分析（异常时规则回退）、覆盖率引导模糊测试、崩溃重放、规则复核、报告及对照实验。标明已接通的假设驱动规则种子、默认 LLM 与可选复核，不再使用旧 Benchmark 三轨复现图。</desc>
+<defs><marker id="arrow" markerWidth="9" markerHeight="9" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="#123F7A"/></marker></defs>
+<rect width="2400" height="1810" fill="white"/>
+<path d="M64,43 V107" stroke="#123F7A" stroke-width="12"/>
+<text x="94" y="94" font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="46" font-weight="bold" fill="#123F7A" text-anchor="start">漏洞发现流程与节点工具</text>
+<text x="94" y="137" font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="25" font-weight="normal" fill="#637990" text-anchor="start">Discovery v1.0：分析提出假设，覆盖率 Fuzz 产生候选，重放与复核给出有限结论。</text>
+<text x="2336" y="76" font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="30" font-weight="bold" fill="#123F7A" text-anchor="end">VULNMAP</text>
+<text x="2336" y="116" font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="22" font-weight="normal" fill="#637990" text-anchor="end">源码优先 · 自建 Fuzz / harness</text>
+<rect x="64" y="168" width="2272" height="73" rx="12" fill="#EDF4FB" stroke="#D7E3F1" stroke-width="1.6"/>
+<text x="88" y="199" font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="23" font-weight="bold" fill="#123F7A" text-anchor="start">输入</text>
+<text x="160" y="199" font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="23" font-weight="normal" fill="#293F58" text-anchor="start">源码 / 二进制 + target.yaml 构建描述；不以已知崩溃位置作为发现输入。</text>
+<text x="160" y="227" font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="21" font-weight="normal" fill="#637990" text-anchor="start">禁止输入：error.txt、patch.diff、官方 PoC、上游 issue 与 CVE 页面；构建描述由 targetspec.py 读取。</text>
+<rect x="64" y="262" width="46" height="42" rx="8" fill="#123F7A" stroke="#123F7A" stroke-width="1.6"/>
+<text x="87" y="292" font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="22" font-weight="bold" fill="white" text-anchor="middle">01</text>
+<text x="126" y="292" font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="28" font-weight="bold" fill="#123F7A" text-anchor="start">静态档案与并行分析</text>
+<text x="2336" y="292" font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="21" font-weight="normal" fill="#637990" text-anchor="end">集中式 Campaign 编排；分析 Worker 只读源码，不执行目标、不输出 verdict</text>
+<rect x="64" y="320" width="736" height="205" rx="12" fill="#F4F8FD" stroke="#D7E3F1" stroke-width="1.6"/>
+<g id="d0" data-node="true" data-tools="profile.py · Python 源码扫描 | ELF magic · hashlib（SHA-256）" data-output="target.json">
+<text x="86" y="358" font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="27" font-weight="bold" fill="#123F7A" text-anchor="start">D0  静态档案</text>
+<text x="86" y="392" font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="22" font-weight="normal" fill="#637990" text-anchor="start">源码 / ELF 指纹 / 入口 / 函数 / 格式</text>
+<text x="86" y="431" font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="20" font-weight="bold" fill="#147D83" text-anchor="start">工具</text>
+<text x="146" y="431" font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="23" font-weight="normal" fill="#293F58" text-anchor="start">profile.py · Python 源码扫描</text>
+<text x="146" y="462" font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="23" font-weight="normal" fill="#293F58" text-anchor="start">ELF magic · hashlib（SHA-256）</text>
+<path d="M86,480 H778" stroke="#D7E3F1"/>
+<text x="86" y="508" font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="20" font-weight="normal" fill="#637990" text-anchor="start">产物</text>
+<text x="146" y="508" font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="21" font-weight="normal" fill="#147D83" text-anchor="start">target.json</text>
+</g>
+<path d="M802,422 L824,422" fill="none" stroke="#123F7A" stroke-width="2.5" marker-end="url(#arrow)"/>
+<rect x="832" y="320" width="736" height="205" rx="12" fill="#F4F8FD" stroke="#D7E3F1" stroke-width="1.6"/>
+<g id="d1" data-node="true" data-tools="callsites.py · 正则检索 | 近似调用图 BFS · 固定评分" data-output="callsites.json">
+<text x="854" y="358" font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="27" font-weight="bold" fill="#123F7A" text-anchor="start">D1  调用点台账与排序</text>
+<text x="854" y="392" font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="22" font-weight="normal" fill="#637990" text-anchor="start">危险调用点 / 近似可达性 / 参数线索</text>
+<text x="854" y="431" font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="20" font-weight="bold" fill="#147D83" text-anchor="start">工具</text>
+<text x="914" y="431" font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="23" font-weight="normal" fill="#293F58" text-anchor="start">callsites.py · 正则检索</text>
+<text x="914" y="462" font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="23" font-weight="normal" fill="#293F58" text-anchor="start">近似调用图 BFS · 固定评分</text>
+<path d="M854,480 H1546" stroke="#D7E3F1"/>
+<text x="854" y="508" font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="20" font-weight="normal" fill="#637990" text-anchor="start">产物</text>
+<text x="914" y="508" font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="21" font-weight="normal" fill="#147D83" text-anchor="start">callsites.json</text>
+</g>
+<path d="M1570,422 L1592,422" fill="none" stroke="#123F7A" stroke-width="2.5" marker-end="url(#arrow)"/>
+<rect x="1600" y="320" width="736" height="205" rx="12" fill="#F4F8FD" stroke="#D7E3F1" stroke-width="1.6"/>
+<g id="d15" data-node="true" data-tools="agents.py · ThreadPoolExecutor | LLM（默认）/ heuristic_analyze 回退" data-output="hypotheses.json（仅假设）">
+<text x="1622" y="358" font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="27" font-weight="bold" fill="#123F7A" text-anchor="start">D1.5  只读分析 Worker</text>
+<text x="1622" y="392" font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="22" font-weight="normal" fill="#637990" text-anchor="start">默认 LLM 并发分析；无 key / 异常回退</text>
+<text x="1622" y="431" font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="20" font-weight="bold" fill="#147D83" text-anchor="start">工具</text>
+<text x="1682" y="431" font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="23" font-weight="normal" fill="#293F58" text-anchor="start">agents.py · ThreadPoolExecutor</text>
+<text x="1682" y="462" font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="23" font-weight="normal" fill="#293F58" text-anchor="start">LLM（默认）/ heuristic_analyze 回退</text>
+<path d="M1622,480 H2314" stroke="#D7E3F1"/>
+<text x="1622" y="508" font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="20" font-weight="normal" fill="#637990" text-anchor="start">产物</text>
+<text x="1682" y="508" font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="21" font-weight="normal" fill="#147D83" text-anchor="start">hypotheses.json（仅假设）</text>
+</g>
+<path d="M1968,525 V553 H928" fill="none" stroke="#AE7026" stroke-width="2" stroke-dasharray="7 6"/>
+<text x="1280" y="580" font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="21" font-weight="normal" fill="#AE7026" text-anchor="middle">已接通：假设 → 规则构造定向种子；非 LLM 自主生成任意测试程序</text>
+<rect x="64" y="600" width="46" height="42" rx="8" fill="#123F7A" stroke="#123F7A" stroke-width="1.6"/>
+<text x="87" y="630" font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="22" font-weight="bold" fill="white" text-anchor="middle">02</text>
+<text x="126" y="630" font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="28" font-weight="bold" fill="#123F7A" text-anchor="start">覆盖率引导 Fuzz</text>
+<text x="2336" y="630" font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="21" font-weight="normal" fill="#637990" text-anchor="end">最小 API harness；auto 优先 bwrap，其次 unshare；--require-isolation 禁止无隔离执行</text>
+<rect x="64" y="658" width="550" height="205" rx="12" fill="white" stroke="#D7E3F1" stroke-width="1.6"/>
+<g id="build" data-node="true" data-tools="targetspec.py · gcc · ASAN | trace-pc · 内置 / 自定义 harness" data-output="fuzz_target / cov_rt.o">
+<text x="86" y="696" font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="27" font-weight="bold" fill="#123F7A" text-anchor="start">D2  构建与目标 harness</text>
+<text x="86" y="730" font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="22" font-weight="normal" fill="#637990" text-anchor="start">target.yaml / 预构建对象 / 链接库</text>
+<text x="86" y="769" font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="20" font-weight="bold" fill="#147D83" text-anchor="start">工具</text>
+<text x="146" y="769" font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="23" font-weight="normal" fill="#293F58" text-anchor="start">targetspec.py · gcc · ASAN</text>
+<text x="146" y="800" font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="23" font-weight="normal" fill="#293F58" text-anchor="start">trace-pc · 内置 / 自定义 harness</text>
+<path d="M86,818 H592" stroke="#D7E3F1"/>
+<text x="86" y="846" font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="20" font-weight="normal" fill="#637990" text-anchor="start">产物</text>
+<text x="146" y="846" font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="21" font-weight="normal" fill="#147D83" text-anchor="start">fuzz_target / cov_rt.o</text>
+</g>
+<path d="M616,760 L632,760" fill="none" stroke="#123F7A" stroke-width="2.5" marker-end="url(#arrow)"/>
+<rect x="638" y="658" width="550" height="205" rx="12" fill="white" stroke="#D7E3F1" stroke-width="1.6"/>
+<g id="seeds" data-node="true" data-tools="agents.propose_seeds | 格式模板 · hypothesis / seed_basis" data-output="corpus/（SHA 去重）">
+<text x="660" y="696" font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="27" font-weight="bold" fill="#123F7A" text-anchor="start">D2  初始种子与语料</text>
+<text x="660" y="730" font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="22" font-weight="normal" fill="#637990" text-anchor="start">格式模板 + 假设线索，不直接判漏洞</text>
+<text x="660" y="769" font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="20" font-weight="bold" fill="#147D83" text-anchor="start">工具</text>
+<text x="720" y="769" font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="23" font-weight="normal" fill="#293F58" text-anchor="start">agents.propose_seeds</text>
+<text x="720" y="800" font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="23" font-weight="normal" fill="#293F58" text-anchor="start">格式模板 · hypothesis / seed_basis</text>
+<path d="M660,818 H1166" stroke="#D7E3F1"/>
+<text x="660" y="846" font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="20" font-weight="normal" fill="#637990" text-anchor="start">产物</text>
+<text x="720" y="846" font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="21" font-weight="normal" fill="#147D83" text-anchor="start">corpus/（SHA 去重）</text>
+</g>
+<path d="M1190,760 L1206,760" fill="none" stroke="#123F7A" stroke-width="2.5" marker-end="url(#arrow)"/>
+<rect x="1212" y="658" width="550" height="205" rx="12" fill="white" stroke="#D7E3F1" stroke-width="1.6"/>
+<g id="fuzz" data-node="true" data-tools="covfuzz.py · multiprocessing | 位图反馈 · PNG / TIFF 结构变异" data-output="crashes/ · stats/ · corpus/">
+<text x="1234" y="696" font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="27" font-weight="bold" fill="#123F7A" text-anchor="start">D2  并行覆盖率 Fuzz</text>
+<text x="1234" y="730" font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="22" font-weight="normal" fill="#637990" text-anchor="start">变异 → 执行 → 新覆盖入库</text>
+<text x="1234" y="769" font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="20" font-weight="bold" fill="#147D83" text-anchor="start">工具</text>
+<text x="1294" y="769" font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="23" font-weight="normal" fill="#293F58" text-anchor="start">covfuzz.py · multiprocessing</text>
+<text x="1294" y="800" font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="23" font-weight="normal" fill="#293F58" text-anchor="start">位图反馈 · PNG / TIFF 结构变异</text>
+<path d="M1234,818 H1740" stroke="#D7E3F1"/>
+<text x="1234" y="846" font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="20" font-weight="normal" fill="#637990" text-anchor="start">产物</text>
+<text x="1294" y="846" font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="21" font-weight="normal" fill="#147D83" text-anchor="start">crashes/ · stats/ · corpus/</text>
+</g>
+<path d="M1764,760 L1780,760" fill="none" stroke="#123F7A" stroke-width="2.5" marker-end="url(#arrow)"/>
+<rect x="1786" y="658" width="550" height="205" rx="12" fill="white" stroke="#D7E3F1" stroke-width="1.6"/>
+<g id="coverage" data-node="true" data-tools="cov_rt.c · COV_PCS | addr2line → file:line / function" data-output="callsites.json 覆盖回写">
+<text x="1808" y="696" font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="27" font-weight="bold" fill="#123F7A" text-anchor="start">D2  覆盖率归属</text>
+<text x="1808" y="730" font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="22" font-weight="normal" fill="#637990" text-anchor="start">区分行级命中与函数级命中</text>
+<text x="1808" y="769" font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="20" font-weight="bold" fill="#147D83" text-anchor="start">工具</text>
+<text x="1868" y="769" font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="23" font-weight="normal" fill="#293F58" text-anchor="start">cov_rt.c · COV_PCS</text>
+<text x="1868" y="800" font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="23" font-weight="normal" fill="#293F58" text-anchor="start">addr2line → file:line / function</text>
+<path d="M1808,818 H2314" stroke="#D7E3F1"/>
+<text x="1808" y="846" font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="20" font-weight="normal" fill="#637990" text-anchor="start">产物</text>
+<text x="1868" y="846" font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="21" font-weight="normal" fill="#147D83" text-anchor="start">callsites.json 覆盖回写</text>
+</g>
+<text x="1200" y="902" font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="23" font-weight="bold" fill="#123F7A" text-anchor="middle">Fuzz 产生的是候选崩溃，不是高危数量；0 崩溃和覆盖不足也必须保留。</text>
+<rect x="64" y="927" width="46" height="42" rx="8" fill="#123F7A" stroke="#123F7A" stroke-width="1.6"/>
+<text x="87" y="957" font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="22" font-weight="bold" fill="white" text-anchor="middle">03</text>
+<text x="126" y="957" font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="28" font-weight="bold" fill="#123F7A" text-anchor="start">崩溃分诊、规则复核与报告</text>
+<text x="2336" y="957" font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="21" font-weight="normal" fill="#637990" text-anchor="end">默认规则复核；可开启单次 LLM 审查，但结论不得超过规则证据上限</text>
+<rect x="64" y="985" width="736" height="205" rx="12" fill="#F4F8FD" stroke="#D7E3F1" stroke-width="1.6"/>
+<g id="triage" data-node="true" data-tools="triage.py · ASAN 诊断解析 | 栈签名去重 · subprocess 重放" data-output="triage.json / 重建与复现状态">
+<text x="86" y="1023" font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="27" font-weight="bold" fill="#123F7A" text-anchor="start">D3  解析、去重与重复验证</text>
+<text x="86" y="1057" font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="22" font-weight="normal" fill="#637990" text-anchor="start">尝试独立重建；同一输入重放 3 次</text>
+<text x="86" y="1096" font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="20" font-weight="bold" fill="#147D83" text-anchor="start">工具</text>
+<text x="146" y="1096" font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="23" font-weight="normal" fill="#293F58" text-anchor="start">triage.py · ASAN 诊断解析</text>
+<text x="146" y="1127" font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="23" font-weight="normal" fill="#293F58" text-anchor="start">栈签名去重 · subprocess 重放</text>
+<path d="M86,1145 H778" stroke="#D7E3F1"/>
+<text x="86" y="1173" font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="20" font-weight="normal" fill="#637990" text-anchor="start">产物</text>
+<text x="146" y="1173" font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="21" font-weight="normal" fill="#147D83" text-anchor="start">triage.json / 重建与复现状态</text>
+</g>
+<path d="M802,1087 L824,1087" fill="none" stroke="#123F7A" stroke-width="2.5" marker-end="url(#arrow)"/>
+<rect x="832" y="985" width="736" height="205" rx="12" fill="#F4F8FD" stroke="#D7E3F1" stroke-width="1.6"/>
+<g id="review" data-node="true" data-tools="agents.heuristic_review | llm_review（显式启用）· 硬门禁" data-output="reviews.json / 结论与理由">
+<text x="854" y="1023" font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="27" font-weight="bold" fill="#123F7A" text-anchor="start">D3.5  规则 / 可选 LLM 复核</text>
+<text x="854" y="1057" font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="22" font-weight="normal" fill="#637990" text-anchor="start">写入 / 读或 UB / 不复现 / 不稳定</text>
+<text x="854" y="1096" font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="20" font-weight="bold" fill="#147D83" text-anchor="start">工具</text>
+<text x="914" y="1096" font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="23" font-weight="normal" fill="#293F58" text-anchor="start">agents.heuristic_review</text>
+<text x="914" y="1127" font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="23" font-weight="normal" fill="#293F58" text-anchor="start">llm_review（显式启用）· 硬门禁</text>
+<path d="M854,1145 H1546" stroke="#D7E3F1"/>
+<text x="854" y="1173" font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="20" font-weight="normal" fill="#637990" text-anchor="start">产物</text>
+<text x="914" y="1173" font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="21" font-weight="normal" fill="#147D83" text-anchor="start">reviews.json / 结论与理由</text>
+</g>
+<path d="M1570,1087 L1592,1087" fill="none" stroke="#123F7A" stroke-width="2.5" marker-end="url(#arrow)"/>
+<rect x="1600" y="985" width="736" height="205" rx="12" fill="#F4F8FD" stroke="#D7E3F1" stroke-width="1.6"/>
+<g id="report" data-node="true" data-tools="report.py · JSON / Markdown | store.py · SQLite（campaign.db）" data-output="report.json / report.md / 台账">
+<text x="1622" y="1023" font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="27" font-weight="bold" fill="#123F7A" text-anchor="start">D4  报告与持久化</text>
+<text x="1622" y="1057" font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="22" font-weight="normal" fill="#637990" text-anchor="start">完整性 / 风险统计 / 发现条目</text>
+<text x="1622" y="1096" font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="20" font-weight="bold" fill="#147D83" text-anchor="start">工具</text>
+<text x="1682" y="1096" font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="23" font-weight="normal" fill="#293F58" text-anchor="start">report.py · JSON / Markdown</text>
+<text x="1682" y="1127" font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="23" font-weight="normal" fill="#293F58" text-anchor="start">store.py · SQLite（campaign.db）</text>
+<path d="M1622,1145 H2314" stroke="#D7E3F1"/>
+<text x="1622" y="1173" font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="20" font-weight="normal" fill="#637990" text-anchor="start">产物</text>
+<text x="1682" y="1173" font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="21" font-weight="normal" fill="#147D83" text-anchor="start">report.json / report.md / 台账</text>
+</g>
+<rect x="64" y="1214" width="2272" height="64" rx="12" fill="#EFF6F5" stroke="#D1E6E0" stroke-width="1.6"/>
+<text x="88" y="1254" font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="23" font-weight="bold" fill="#147D83" text-anchor="start">四类规则结论</text>
+<text x="300" y="1254" font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="22" font-weight="normal" fill="#293F58" text-anchor="start">confirmed：写入重复命中  |  weakened：读 / UB 重复命中  |  excluded：无法复现  |  needs_human：不稳定或待核</text>
+<rect x="64" y="1312" width="46" height="42" rx="8" fill="#123F7A" stroke="#123F7A" stroke-width="1.6"/>
+<text x="87" y="1342" font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="22" font-weight="bold" fill="white" text-anchor="middle">04</text>
+<text x="126" y="1342" font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="28" font-weight="bold" fill="#123F7A" text-anchor="start">D5  对照实验与效果评估</text>
+<text x="2336" y="1342" font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="21" font-weight="normal" fill="#637990" text-anchor="end">重复运行 Campaign 做对照；指标相同才可比较，不预设 Agent 有优势</text>
+<rect x="64" y="1370" width="1124" height="205" rx="12" fill="white" stroke="#D7E3F1" stroke-width="1.6"/>
+<g id="ranked" data-node="true" data-tools="campaign.evaluate · 固定排序 / 随机序 | 指标：覆盖率 / confirmed / 首次崩溃耗时" data-output="eval.json / eval.md">
+<text x="86" y="1408" font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="27" font-weight="bold" fill="#123F7A" text-anchor="start">调用点策略对照：ranked vs random</text>
+<text x="86" y="1442" font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="22" font-weight="normal" fill="#637990" text-anchor="start">比较选点策略，不把同分结果包装成提升</text>
+<text x="86" y="1481" font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="20" font-weight="bold" fill="#147D83" text-anchor="start">工具</text>
+<text x="146" y="1481" font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="23" font-weight="normal" fill="#293F58" text-anchor="start">campaign.evaluate · 固定排序 / 随机序</text>
+<text x="146" y="1512" font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="23" font-weight="normal" fill="#293F58" text-anchor="start">指标：覆盖率 / confirmed / 首次崩溃耗时</text>
+<path d="M86,1530 H1166" stroke="#D7E3F1"/>
+<text x="86" y="1558" font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="20" font-weight="normal" fill="#637990" text-anchor="start">产物</text>
+<text x="146" y="1558" font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="21" font-weight="normal" fill="#147D83" text-anchor="start">eval.json / eval.md</text>
+</g>
+<rect x="1212" y="1370" width="1124" height="205" rx="12" fill="white" stroke="#D7E3F1" stroke-width="1.6"/>
+<g id="ab" data-node="true" data-tools="campaign.ab_seeds · probe_first_crash | 指标：首次崩溃执行数 / 耗时 / 命中轮次" data-output="ab.json / 负结果保留">
+<text x="1234" y="1408" font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="27" font-weight="bold" fill="#123F7A" text-anchor="start">种子对照：格式模板种子 vs 基础种子</text>
+<text x="1234" y="1442" font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="22" font-weight="normal" fill="#637990" text-anchor="start">假设驱动规则模板；需区分 LLM 与规则回退</text>
+<text x="1234" y="1481" font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="20" font-weight="bold" fill="#147D83" text-anchor="start">工具</text>
+<text x="1294" y="1481" font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="23" font-weight="normal" fill="#293F58" text-anchor="start">campaign.ab_seeds · probe_first_crash</text>
+<text x="1294" y="1512" font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="23" font-weight="normal" fill="#293F58" text-anchor="start">指标：首次崩溃执行数 / 耗时 / 命中轮次</text>
+<path d="M1234,1530 H2314" stroke="#D7E3F1"/>
+<text x="1234" y="1558" font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="20" font-weight="normal" fill="#637990" text-anchor="start">产物</text>
+<text x="1294" y="1558" font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="21" font-weight="normal" fill="#147D83" text-anchor="start">ab.json / 负结果保留</text>
+</g>
+<rect x="64" y="1610" width="2272" height="130" rx="12" fill="#FFF8EE" stroke="#E4CCAA" stroke-width="1.6"/>
+<text x="88" y="1648" font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="25" font-weight="bold" fill="#AE7026" text-anchor="start">当前边界与待完善项</text>
+<text x="88" y="1686" font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="23" font-weight="normal" fill="#293F58" text-anchor="start">已实现：有效诊断 + 干净重建门禁；bwrap / unshare 隔离；不可用时可要求直接失败。</text>
+<text x="88" y="1720" font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="22" font-weight="normal" fill="#637990" text-anchor="start">待完善：更深层源码推理、覆盖率与 harness 扩展、严格 LLM 增益对照，以及 Discovery 前端接入。</text>
+<text x="64" y="1780" font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif" font-size="22" font-weight="normal" fill="#637990" text-anchor="start">口径：confirmed 是有限的程序规则结论，不能直接等同高危、可利用或新 CVE；图示按当前实现标注，不把规划画成已完成。</text>
+</svg>

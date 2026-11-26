@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CasePack · vulnmap</title>
+<link rel="stylesheet" href="style.css?v=202611161150">
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar" id="sidebar"></aside>
+  <div class="main">
+    <header class="tophead" id="tophead"></header>
+    <div class="content" id="content"><div class="loading">正在读取 CasePack 台账…</div></div>
+  </div>
+</div>
+<script src="app.js?v=202611161130"></script>
+<script>
+const TID = new URLSearchParams(location.search).get('task_id') || '';
+renderShell('platform-tasks', {
+  title: 'CasePack / 报告',
+  sub: '打包台账：路径 + 文件清单 + 可复算内容哈希；报告与事件流都在包内，页面只读下载。'
+});
+
+const short = (s, n = 24) => s ? String(s).slice(0, n) + (String(s).length > n ? '…' : '') : '—';
+const size = n => n >= 1048576 ? (n / 1048576).toFixed(1) + ' MiB'
+  : n >= 1024 ? (n / 1024).toFixed(1) + ' KiB' : (n || 0) + ' B';
+
+function filesTable(files) {
+  if (!files.length) return '<div class="pf-empty">包内没有文件（pack 目录异常）。</div>';
+  return `<div class="tw"><table class="overview-table"><thead><tr>
+      <th>文件</th><th>大小</th><th>sha256</th><th>下载</th>
+    </tr></thead><tbody>${files.map(f => `<tr>
+      <td class="mono">${esc(f.path)}</td><td class="mono">${esc(size(f.size))}</td>
+      <td class="mono" title="${esc(f.sha256)}">${esc(short(f.sha256, 20))}</td>
+      <td><a class="pf-btn" href="/api/platform/tasks/${encodeURIComponent(TID)}/casepack/file?name=${encodeURIComponent(f.path)}" download>下载</a></td>
+    </tr>`).join('')}</tbody></table></div>`;
+}
+
+function reportsTable(reports) {
+  return `<div class="tw"><table class="overview-table"><thead><tr>
+      <th>report</th><th>content_sha256</th><th>路径</th><th>时间</th>
+    </tr></thead><tbody>${reports.map(r => `<tr>
+      <td class="mono">${esc(r.report_id)}</td>
+      <td class="mono" title="${esc(r.sha256)}">${esc(short(r.sha256, 20))}</td>
+      <td class="mono">${esc(r.path)}</td><td class="mono">${esc(r.created_at)}</td>
+    </tr>`).join('')}</tbody></table></div>`;
+}
+
+async function reportPreview(files) {
+  if (!files.some(f => f.path === 'report.md')) return '';
+  try {
+    const r = await fetch(`/api/platform/tasks/${encodeURIComponent(TID)}/casepack/file?name=report.md`);
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const text = await r.text();
+    return `<section class="panel cases-panel" style="margin-top:20px">
+      <div class="panel-hd"><div><h2>report.md</h2><p>包里的人读报告（确定性渲染，可下载原文）</p></div>
+        <a class="pf-btn" href="/api/platform/tasks/${encodeURIComponent(TID)}/casepack/file?name=report.md" download>下载 report.md</a></div>
+      <div class="panel-bd"><pre class="pf-pre">${esc(text)}</pre></div></section>`;
+  } catch (e) { return ''; }
+}
+
+async function render(d) {
+  const files = d.files || [];
+  const preview = await reportPreview(files);
+  $('#content').innerHTML = `
+    <section class="panel cases-panel" style="margin-bottom:20px">
+      <div class="panel-hd"><div><h2>CasePack · <span class="mono">${esc(TID)}</span></h2>
+        <p>最新一次打包：${esc(d.report_id)} · ${esc(d.created_at)}</p></div>
+        <a class="pf-btn" href="${taskHref('platform-task.html', TID)}">任务详情 ${icon('arrow')}</a></div>
+      ${taskNav(TID, 'platform-casepack.html')}
+      <div class="pf-kpis">
+        <div class="pf-kpi"><span>report</span><b>${esc(d.report_id)}</b><span>reports 台账</span></div>
+        <div class="pf-kpi"><span>哈希可复算</span><b>${d.hash_ok ? 'OK' : 'CHECK'}</b><span>content_sha256</span></div>
+        <div class="pf-kpi"><span>文件</span><b>${esc(files.length)}</b><span>包内清单</span></div>
+        <div class="pf-kpi"><span>包目录</span><b>${d.exists ? '在盘' : '缺失'}</b><span>${esc(d.exists ? '已落盘' : '目录不存在')}</span></div>
+      </div>
+      <div class="panel-bd" style="padding-top:0">
+        <div class="kv-row"><span class="k">路径</span><span class="v">${esc(d.path)}</span></div>
+        <div class="kv-row"><span class="k">content_sha256</span><span class="v">${esc(d.content_sha256)}</span></div>
+        <div class="kv-row"><span class="k">现场重算</span><span class="v">${esc(d.recomputed_sha256 || '—')}
+          ${d.hash_ok ? badge('一致', 'b-ok') : badge('不一致 / 无法复算', 'b-warn')}</span></div>
+        <div class="kv-row"><span class="k">下载</span><span class="v">
+          <a class="pf-btn" href="/api/platform/tasks/${encodeURIComponent(TID)}/casepack/file?name=casepack.json" download>casepack.json</a>
+          <a class="pf-btn" href="/api/platform/tasks/${encodeURIComponent(TID)}/casepack/file?name=events.jsonl" download>events.jsonl</a>
+          <a class="pf-btn" href="/api/platform/tasks/${encodeURIComponent(TID)}/casepack/file?name=report.md" download>report.md</a></span></div>
+      </div>
+    </section>
+
+    <section class="panel cases-panel" style="margin-bottom:20px">
+      <div class="panel-hd"><div><h2>包内文件 <span class="count-label">${files.length}</span></h2>
+        <p>task / state / events / candidates / verifications / reviews / manifest / report</p></div></div>
+      ${filesTable(files)}
+      <div class="table-footer"><span>只读下载 · blob 留在内容寻址 store，pack 只记哈希</span>
+        <span class="scope-link">GET /api/platform/tasks/{id}/casepack/file?name=</span></div>
+    </section>
+
+    <section class="panel cases-panel">
+      <div class="panel-hd"><div><h2>打包台账 <span class="count-label">${(d.reports || []).length}</span></h2>
+        <p>reports 表：每次打包一行，content_sha256 是台账与磁盘之间的纽带</p></div></div>
+      ${reportsTable(d.reports || [])}
+    </section>
+    ${preview}`;
+}
+
+async function start() {
+  if (!TID) {
+    try {
+      const d = await api('/api/platform/tasks?limit=200');
+      $('#content').innerHTML = `<section class="panel cases-panel"><div class="panel-hd"><div><h2>选择任务查看 CasePack</h2>
+        <p>CasePack 在 REVIEW/REPORTED 之后产生；从下面的列表进入。</p></div>
+        <a class="pf-btn" href="platform-tasks.html">V2 任务 ${icon('arrow')}</a></div>
+        ${taskPicker(d.items || [], '还没有任务，先去「V2 任务」页提交一个。')}</section>`;
+    } catch (e) { fail($('#content'), e); }
+    return;
+  }
+  try {
+    const d = await getOr404('/api/platform/tasks/' + encodeURIComponent(TID) + '/casepack');
+    if (!d) {
+      $('#content').innerHTML = `<section class="panel cases-panel">
+        <div class="panel-hd"><div><h2>CasePack · <span class="mono">${esc(TID)}</span></h2>
+          <p>该任务还没有出包记录（reports 表为空）。</p></div>
+          <a class="pf-btn" href="${taskHref('platform-task.html', TID)}">任务详情 ${icon('arrow')}</a></div>
+        ${taskNav(TID, 'platform-casepack.html')}
+        <div class="pf-empty">CasePack 只由运行时（<code class="mono">platform casepack</code>）产生；
+          本页只读展示，不提供打包按钮。先走完 候选 → 验证 → 复核，再出包。</div></section>`;
+      return;
+    }
+    await render(d);
+  } catch (e) {
+    $('#content').innerHTML = `<div class="error" role="alert"><b>CasePack 不可读</b>
+      <p>${esc(e.message)}（task_id=${esc(TID)}）</p><a class="pf-btn" href="platform-tasks.html">返回任务列表</a></div>`;
+  }
+}
+start();
+</script>
+</body>
+</html>

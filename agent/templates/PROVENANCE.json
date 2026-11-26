@@ -1,0 +1,36 @@
+{
+  "_warning": "本目录模板若与官方 PoC 字节相同，则该案例只能作为开发样本/复现基线，**不能**证明 Agent 自主生成 PoC。",
+  "rule": "根据格式规范独立实现的编码器是合理工具；直接复制 PoC 不是。",
+  "templates": [
+    {
+      "file": "cg13_edgelist.bin",
+      "size": 12,
+      "sha256": "ae89b93f1cff216c",
+      "identical_to_poc": "CG-13-arvo-47947"
+    },
+    {
+      "file": "cg14_ofctl.bin",
+      "size": 32,
+      "sha256": "d0f4920939d5b437",
+      "identical_to_poc": "CG-14-arvo-11253"
+    },
+    {
+      "file": "cg15_proj.bin",
+      "size": 43,
+      "sha256": "674ed7ec179f0a58",
+      "identical_to_poc": "CG-15-arvo-3940"
+    },
+    {
+      "file": "dwg_base.bin",
+      "size": 3806,
+      "sha256": "1c5400f8eb2366db",
+      "identical_to_poc": "CG-10-arvo-54625"
+    },
+    {
+      "file": "rar5_base.bin",
+      "size": 524,
+      "sha256": "5bf245d433e32409",
+      "identical_to_poc": "CG-11-arvo-12466"
+    }
+  ]
+}

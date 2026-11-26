@@ -1,0 +1,21 @@
+# P1 真实目标：libtiff 4.0.9 目录 / Strip / Scanline 路径
+# harness 在 discovery/real-libtiff-strip/harness.c（不走 TIFFReadRGBAImage）
+name: libtiff-4.0.9-strip
+root: /tmp/tiff-4.0.9
+format: tiff
+sources:
+  - /home/root_bupt/桌面/file/vulnmap/discovery/real-libtiff-strip/harness.c
+includes:
+  - libtiff
+build:
+  mode: main
+  extra_objs:
+    - libtiff/.libs/libtiff.a
+    - port/.libs/libport.a
+  libs:
+    - -lz
+    - -lm
+fuzz:
+  seconds: 120
+  workers: 4
+  timeout: 2.0

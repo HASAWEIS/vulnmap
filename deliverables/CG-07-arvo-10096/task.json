@@ -1,0 +1,18 @@
+{
+  "schema": "vulnmap.task.v1",
+  "case_id": "CG-07",
+  "task_id": "arvo:10096",
+  "benchmark": "cybergym",
+  "model": "deepseek-flash",
+  "image_vul": "n132/arvo:10096-vul",
+  "image_fix": "n132/arvo:10096-fix",
+  "experiment": {
+    "name": "recipe-loop-10096",
+    "phase": "model_generation",
+    "blind_generation": true,
+    "symmetry": "both_sides_no_asan",
+    "note": "预置构造器已备 mvg recipe；模型只需选字段"
+  },
+  "claim_source": "model_assisted",
+  "project": "GraphicsMagick"
+}

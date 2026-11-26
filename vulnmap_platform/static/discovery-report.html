@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Discovery 报告正文 · vulnmap</title>
+<link rel="stylesheet" href="style.css?v=202611161150">
+<style>
+.report-browser{display:grid;grid-template-columns:280px minmax(0,1fr);gap:18px;align-items:start}
+.report-list{position:sticky;top:18px;max-height:calc(100vh - 40px);overflow:auto}
+.report-list a{display:block;padding:10px 14px;border-bottom:1px solid var(--line-soft);font-size:12px;color:var(--ink-700)}
+.report-list a:last-child{border-bottom:0}
+.report-list a:hover{background:var(--line-soft)}
+.report-list a.on{background:var(--brand-soft);color:var(--brand);font-weight:600}
+.report-list .sub{display:block;font:10px var(--mono);color:var(--ink-400);margin-top:3px;word-break:break-all}
+.report-body{padding:8px 26px 26px;line-height:1.9;font-size:14px;color:var(--ink-700);min-width:0}
+.report-body h2{font-size:20px;color:var(--ink-900);margin:26px 0 10px;padding-bottom:8px;border-bottom:1px solid var(--line)}
+.report-body h3{font-size:16px;color:var(--ink-800);margin:22px 0 8px}
+.report-body h4{font-size:14px;color:var(--ink-800);margin:18px 0 6px}
+.report-body p{margin:8px 0;overflow-wrap:anywhere}
+.report-body code{font:12px var(--mono);background:var(--line-soft);padding:2px 5px;border-radius:3px;overflow-wrap:anywhere}
+.report-body pre{background:var(--line-soft);border:1px solid var(--line);border-radius:6px;padding:14px;overflow:auto}
+.report-body pre code{background:none;padding:0}
+.report-body table{width:100%;border-collapse:collapse;font-size:12px}
+.report-body th,.report-body td{border:1px solid var(--line);padding:7px 10px;text-align:left;vertical-align:top}
+.report-body th{background:var(--line-soft);color:var(--ink-600)}
+.report-body ul{margin:8px 0;padding-left:22px}
+.report-body blockquote{margin:10px 0;padding:10px 14px;border-left:3px solid var(--brand-line);background:var(--brand-soft);color:var(--ink-600);font-size:13px}
+@media(max-width:900px){.report-browser{grid-template-columns:1fr}.report-list{position:static;max-height:260px}}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar" id="sidebar"></aside>
+  <div class="main">
+    <header class="tophead" id="tophead"></header>
+    <div class="content" id="content"><div class="loading">加载报告索引…</div></div>
+  </div>
+</div>
+<script src="app.js?v=202611161130"></script>
+<script>
+renderShell('discovery-reports', {
+  title: 'Discovery 报告正文',
+  sub: '直接读取单个 campaign 的 report.md；Benchmark 分组报告见 Reports。'
+});
+
+let CAMPAIGNS = [];
+const Q = new URLSearchParams(location.search);
+let CURRENT = Q.get('id') || '';
+let CURRENT_DIR = Q.get('dir') || '';
+
+const inline = s => esc(s)
+  .replace(/`([^`\n]+)`/g, '<code>$1</code>')
+  .replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>');
+
+function splitRow(line) {
+  return line.replace(/^\s*\|/, '').replace(/\|\s*$/, '').split('|').map(s => s.trim());
+}
+
+function mdToHTML(md) {
+  const lines = md.split(/\r?\n/);
+  const out = [];
+  let i = 0;
+  while (i < lines.length) {
+    const line = lines[i];
+    if (/^```/.test(line)) {
+      const buf = [];
+      i++;
+      while (i < lines.length && !/^```/.test(lines[i])) buf.push(lines[i++]);
+      i++;
+      out.push(`<pre><code>${esc(buf.join('\n'))}</code></pre>`);
+      continue;
+    }
+    const heading = line.match(/^(#{1,6})\s+(.*)$/);
+    if (heading) {
+      const level = Math.min(4, heading[1].length + 1);
+      out.push(`<h${level}>${inline(heading[2])}</h${level}>`);
+      i++;
+      continue;
+    }
+    if (/^\s*\|/.test(line) && i + 1 < lines.length && /^\s*\|?[\s:-]+\|/.test(lines[i + 1])) {
+      const headers = splitRow(line);
+      i += 2;
+      const rows = [];
+      while (i < lines.length && /^\s*\|/.test(lines[i])) rows.push(splitRow(lines[i++]));
+      out.push(`<div class="tw"><table><thead><tr>${headers.map(h => `<th>${inline(h)}</th>`).join('')}</tr></thead>
+        <tbody>${rows.map(r => `<tr>${r.map(c => `<td>${inline(c)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`);
+      continue;
+    }
+    if (/^\s*[-*]\s+/.test(line) || /^\s*\d+[.)]\s+/.test(line)) {
+      const items = [];
+      while (i < lines.length && (/^\s*[-*]\s+/.test(lines[i]) || /^\s*\d+[.)]\s+/.test(lines[i]))) {
+        items.push(lines[i].replace(/^\s*(?:[-*]|\d+[.)])\s+/, ''));
+        i++;
+      }
+      out.push(`<ul>${items.map(x => `<li>${inline(x)}</li>`).join('')}</ul>`);
+      continue;
+    }
+    if (/^>\s?/.test(line)) {
+      const buf = [];
+      while (i < lines.length && /^>\s?/.test(lines[i])) buf.push(lines[i++].replace(/^>\s?/, ''));
+      out.push(`<blockquote>${inline(buf.join(' '))}</blockquote>`);
+      continue;
+    }
+    if (!line.trim()) { i++; continue; }
+    out.push(`<p>${inline(line)}</p>`);
+    i++;
+  }
+  return out.join('\n');
+}
+
+function reportURL(c) {
+  return `/api/discovery/campaigns/${encodeURIComponent(c.id)}/report?dir=${encodeURIComponent(c.key)}`;
+}
+
+function selectCampaign(c, push = true) {
+  CURRENT = c.id;
+  CURRENT_DIR = c.key;
+  if (push) {
+    const u = new URL(location.href);
+    u.searchParams.set('id', c.id);
+    u.searchParams.set('dir', c.key);
+    history.replaceState(null, '', u);
+  }
+  $$('.report-list a').forEach(a => a.classList.toggle('on',
+    a.dataset.id === c.id && a.dataset.dir === c.key));
+  const reader = $('#reader');
+  if (!reader) return;
+  reader.innerHTML = '<div class="loading">读取 report.md…</div>';
+  fetch(reportURL(c)).then(async r => {
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const md = await r.text();
+    reader.innerHTML = `
+      <div class="panel-hd"><div><h2>${esc(c.id)} · report.md</h2>
+        <p>${esc(c.target || '—')} · 证据目录 ${esc(c.key)}</p></div>
+        <a class="button-link" href="/api/discovery/campaigns/${encodeURIComponent(c.id)}/report?dir=${encodeURIComponent(c.key)}" target="_blank" rel="noopener">原始 Markdown ↗</a></div>
+      <div class="report-body">${mdToHTML(md)}</div>
+      <div class="table-footer"><span>report.md · ${md.length} 字符</span>
+        <a class="scope-link" href="discovery-campaign.html?id=${encodeURIComponent(c.id)}&dir=${encodeURIComponent(c.key)}">查看 Campaign 证据</a></div>`;
+  }).catch(e => {
+    reader.innerHTML = `<div class="error" role="alert"><b>报告读取失败</b><p>${esc(e.message)}</p></div>`;
+  });
+}
+
+function render() {
+  const available = CAMPAIGNS.filter(c => c.report?.available);
+  const current = available.find(c => c.id === CURRENT && c.key === CURRENT_DIR)
+    || available.find(c => c.id === CURRENT)
+    || available[0];
+  $('#content').innerHTML = `
+    <section class="workspace-strip"><div><span class="status-ring"></span>
+      <strong>报告阅读器</strong><span>只渲染 report.md；缺失的报告不补写、不推测。</span></div>
+      <a href="discovery-findings.html">Findings / Crashes ${icon('arrow')}</a></section>
+    <div class="report-browser">
+      <aside class="panel report-list" aria-label="报告目录">
+        <div class="panel-hd"><div><h2>报告目录 <span class="count-label">${available.length}</span></h2></div></div>
+        ${available.map(c => `<a href="#" data-id="${esc(c.id)}" data-dir="${esc(c.key)}">
+          ${esc(c.id)}<span class="sub">${esc(c.key)} · ${esc(c.risk?.confirmed ?? 0)} confirmed</span></a>`).join('')
+          || '<div class="empty">没有可读的 report.md</div>'}
+      </aside>
+      <section class="panel" id="reader"><div class="loading">选择左侧报告…</div></section>
+    </div>
+    <footer class="workspace-footer"><span><i></i>只读报告视图</span>
+      <span>源文件：discovery/**/report.md</span></footer>`;
+  $$('.report-list a').forEach(a => {
+    a.onclick = e => {
+      e.preventDefault();
+      const c = available.find(x => x.id === a.dataset.id && x.key === a.dataset.dir);
+      if (c) selectCampaign(c);
+    };
+  });
+  if (current) selectCampaign(current, false);
+}
+
+api('/api/discovery/campaigns').then(d => {
+  api('/api/cases').then(cs => renderProjects(cs.items)).catch(() => {});
+  CAMPAIGNS = d.items || [];
+  render();
+}).catch(e => fail($('#content'), e));
+</script>
+</body>
+</html>

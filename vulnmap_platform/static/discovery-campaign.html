@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Campaign 详情 · vulnmap</title>
+<link rel="stylesheet" href="style.css?v=202611161150">
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar" id="sidebar"></aside>
+  <div class="main">
+    <header class="tophead" id="tophead"></header>
+    <div class="content" id="content"><div class="loading">加载 Campaign 证据…</div></div>
+  </div>
+</div>
+<script src="app.js?v=202611161130"></script>
+<script>
+renderShell('discovery-campaigns', { title: 'Campaign 详情', sub: '读取 campaign.json 与同目录证据文件' });
+
+const Q = new URLSearchParams(location.search);
+const ID = Q.get('id') || '';
+const DIR = Q.get('dir') || '';
+const qs = `id=${encodeURIComponent(ID)}&dir=${encodeURIComponent(DIR)}`;
+const verdictBadge = v => badge(v || '未分诊',
+  v === 'confirmed' ? 'b-ok' : v === 'weakened' ? 'b-warn' : v === 'excluded' ? 'b-bad' : 'b-dim');
+
+function field(k, v, cls = '') {
+  return `<div class="field"><div class="k">${esc(k)}</div><div class="v ${cls}">${v}</div></div>`;
+}
+
+function section(title, body, extra = '') {
+  return `<section class="panel"><div class="panel-hd"><div><h2>${esc(title)}</h2></div>${extra}</div>
+    <div class="panel-bd">${body}</div></section>`;
+}
+
+function renderDetail(d) {
+  const c = d.campaign || {};
+  const risk = c.risk_stats || {};
+  const cov = c.coverage || {};
+  const cs = d.callsites || { planned: 0, covered: 0, sites: [] };
+  const triage = d.triage || [];
+  const reviews = d.reviews || [];
+  const hyps = d.hypotheses || [];
+  const crashes = d.crashes || [];
+  const target = d.target || {};
+  const analysis = c.analysis || {};
+  const iso = c.execution_isolation || {};
+  const pct = Number(cov.planned) ? Math.round(Number(cov.covered || 0) / Number(cov.planned) * 100) : 0;
+
+  renderHeader('discovery-campaigns', {
+    title: d.id,
+    sub: `${d.key} · ${c.target || '—'} · ${c.strategy || '—'}`,
+  });
+  document.title = `${d.id} · Campaign · vulnmap`;
+
+  const metrics = [
+    ['覆盖率', `${pct}%`, `${cov.covered ?? 0}/${cov.planned ?? 0} 调用点`, 'discovery'],
+    ['Confirmed', risk.confirmed ?? 0, '写入型越界 3/3', 'shield'],
+    ['Weakened', risk.weakened ?? 0, '读/UB 或未稳定复现', 'lab'],
+    ['崩溃文件', crashes.length, 'crashes/crash-*.bin', 'discovery-findings'],
+    ['假设', hyps.length, `LLM ${analysis.llm_hypotheses ?? 0} · 规则回退`, 'report'],
+  ].map(([label, value, desc, ic]) => `<div class="metric">
+      <div class="metric-top"><span>${esc(label)}</span>${icon(ic)}</div>
+      <div class="metric-value">${esc(value)}<span></span></div><p>${esc(desc)}</p></div>`).join('');
+
+  const siteRows = [...(cs.sites || [])]
+    .sort((a, b) => (Number(b.score) || 0) - (Number(a.score) || 0))
+    .map(s => `<tr>
+      <td class="mono">${esc(s.function || '—')}</td>
+      <td class="mono">${esc(s.file || '—')}:${esc(s.line ?? '—')}</td>
+      <td class="mono">${esc(s.callee || '—')}</td>
+      <td class="mono">${esc(s.score ?? '—')}</td>
+      <td>${badge(s.reachable ? '可达' : '不可达', s.reachable ? 'b-info' : 'b-dim')}
+        ${badge(s.controlled ? '可控' : '不可控', s.controlled ? 'b-warn' : 'b-dim')}</td>
+      <td>${s.covered_by_pc ? badge('行命中', 'b-ok') : s.covered_by_function ? badge('函数命中', 'b-warn') : badge('未覆盖', 'b-dim')}</td>
+      <td>${badge(s.status || '—', 'b-dim')}</td>
+    </tr>`).join('');
+
+  const hypRows = hyps.map(h => `<div class="card" style="margin-bottom:12px">
+      <div class="eyebrow">HYPOTHESIS · ${esc(h.site_id || '')}</div>
+      <h3>${esc(h.function || '—')} @ ${esc(h.file || '—')}:${esc(h.line ?? '—')}</h3>
+      <p style="font-size:12px;color:var(--ink-600);margin:0 0 10px;line-height:1.8">${esc(h.hypothesis || '')}</p>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        ${badge(`confidence ${h.confidence ?? '—'}`, 'b-info')}
+        ${badge(`种子 ${h.seed_count ?? 0}`, 'b-purple')}
+        ${badge(h.llm ? 'LLM' : `规则回退${h.llm_status ? ' / ' + h.llm_status : ''}`, h.llm ? 'b-ok' : 'b-dim')}
+      </div>
+      <div class="files">${(h.citations || []).map(x => `<div class="row"><span>${esc(x)}</span><span class="sha">citation</span></div>`).join('')}</div>
+    </div>`).join('') || '<div class="empty">没有 hypotheses.json 记录</div>';
+
+  const triageRows = triage.map(t => `<tr>
+      <td class="mono">${esc(t.stack_hash || '—')}</td>
+      <td>${verdictBadge(t.verdict)}</td>
+      <td class="mono">${esc(t.access || '—')}${t.access_size ? ' of ' + esc(t.access_size) : ''}</td>
+      <td class="mono">${esc(t.function || '—')}</td>
+      <td class="mono">${esc(t.file || '—')}:${esc(t.line ?? '—')}</td>
+      <td class="mono">${esc(t.reproduced ?? '—')}/${esc(t.repeats ?? '—')}</td>
+      <td>${badge(t.build_clean ? '干净构建' : '构建未证实', t.build_clean ? 'b-ok' : 'b-warn')}
+        ${badge(t.diagnostic_valid ? '诊断有效' : '诊断无效', t.diagnostic_valid ? 'b-ok' : 'b-bad')}</td>
+      <td style="white-space:normal;min-width:180px">${esc(t.reason || '—')}</td>
+    </tr>`).join('');
+
+  const reviewRows = reviews.map(r => `<tr>
+      <td class="mono">${esc(r.candidate || r.stack_hash || '—')}</td>
+      <td>${verdictBadge(r.verdict)}</td>
+      <td>${verdictBadge(r.original_verdict)}</td>
+      <td class="mono">${esc(r.access || '—')}</td>
+      <td class="mono">${esc(r.reproduced ?? '—')}</td>
+      <td style="white-space:normal">${esc(r.reason || r.root_cause || '—')}</td>
+    </tr>`).join('');
+
+  const crashRows = crashes.map(x => `<tr>
+      <td><a class="case-link" href="discovery-findings.html">${esc(x.name)}${icon('arrow')}</a></td>
+      <td class="mono">${esc(x.size)} B</td>
+      <td class="mono">${esc(x.triage?.stack_hash || '—')}</td>
+      <td>${verdictBadge(x.triage?.verdict)}</td>
+      <td class="mono">${esc(x.triage?.function || '—')}:${esc(x.triage?.line ?? '—')}</td>
+      <td class="mono">${esc(x.log?.name || '—')}</td>
+    </tr>`).join('');
+
+  const binRows = (target.binaries || []).map(b => `<tr>
+      <td class="mono">${esc(b.path || '—')}</td>
+      <td class="mono">${esc(b.size ?? '—')}</td>
+      <td class="mono" style="white-space:normal;word-break:break-all">${esc(b.sha256 || '—')}</td>
+    </tr>`).join('');
+
+  $('#content').innerHTML = `
+    <section class="workspace-strip"><div><span class="status-ring"></span>
+      <strong>${esc(d.key)}</strong><span>证据目录 ${esc(d.dir)}</span></div>
+      <a href="discovery-campaigns.html">返回 Campaign 列表 ${icon('arrow')}</a></section>
+
+    <section class="metrics-grid">${metrics}</section>
+
+    ${section('Campaign 元数据', `<div class="fields">
+        ${field('Campaign ID', esc(c.campaign || d.id))}
+        ${field('Target', esc(c.target || '—'))}
+        ${field('策略', esc(c.strategy || '—'))}
+        ${field('格式提示', esc(c.format_hint || '—'))}
+        ${field('执行隔离', `${esc(iso.mode || '—')} · network ${esc(iso.network || '—')}`)}
+        ${field('分析模式', `${esc(analysis.mode || '—')} · ${esc(analysis.llm_status || '—')}`)}
+        ${field('构建 sha256', `<span class="mono" style="font-size:11px">${esc(c.build?.sha256 || '—')}</span>`)}
+        ${field('报告', d.report_path?.available
+          ? `<a href="discovery-report.html?${qs}">阅读 report.md ↗</a> · <a href="/api/discovery/campaigns/${encodeURIComponent(d.id)}/report?dir=${encodeURIComponent(d.key)}" target="_blank" rel="noopener">原始 Markdown</a>`
+          : badge('缺 report.md', 'b-warn'))}
+        ${field('证据路径', `<span class="mono" style="font-size:11px">${esc(d.campaign_path)}</span>`)}
+      </div>`)}
+
+    ${section('覆盖率与风险', `<div class="fields">
+        ${field('调用点覆盖', `${esc(cov.covered ?? 0)} / ${esc(cov.planned ?? 0)}`, 'big')}
+        ${field('覆盖状态', badge(cov.status || '—', cov.status === 'complete' ? 'b-ok' : 'b-warn'))}
+        ${field('未覆盖', esc(cov.uncovered ?? '—'))}
+        ${field('PC / 行 / 函数', `${esc(cov.pcs ?? '—')} / ${esc(cov.mapped_locations ?? '—')} / ${esc(cov.mapped_functions ?? '—')}`)}
+        ${field('函数级命中', esc(cov.function_level_only ?? '—'))}
+        ${field('风险 planned', esc(risk.planned ?? '—'))}
+        ${field('confirmed / weakened', `${esc(risk.confirmed ?? 0)} / ${esc(risk.weakened ?? 0)}`)}
+        ${field('excluded / needs_human', `${esc(risk.excluded ?? 0)} / ${esc(risk.needs_human ?? 0)}`)}
+      </div>`)}
+
+    ${section(`调用点（${(cs.sites || []).length}）`, `<div class="tw" role="region" aria-label="调用点台账" tabindex="0">
+        <table><thead><tr><th>函数</th><th>位置</th><th>callee</th><th>分数</th><th>可达 / 可控</th><th>覆盖</th><th>状态</th></tr></thead>
+        <tbody>${siteRows || '<tr><td colspan="7"><div class="empty">没有 callsites.json 记录</div></td></tr>'}</tbody></table>
+      </div>`, `<span class="meta">D1</span>`)}
+
+    ${section(`假设（${hyps.length}）`, hypRows, `<span class="meta">D1.5</span>`)}
+
+    ${section(`分诊（${triage.length}）`, `<div class="tw" role="region" aria-label="分诊结论" tabindex="0">
+        <table><thead><tr><th>stack_hash</th><th>结论</th><th>读写</th><th>函数</th><th>位置</th><th>复现</th><th>门禁</th><th>原因</th></tr></thead>
+        <tbody>${triageRows || '<tr><td colspan="8"><div class="empty">没有 triage.json 记录</div></td></tr>'}</tbody></table>
+      </div>`, `<span class="meta">D3</span>`)}
+
+    ${section(`复核（${reviews.length}）`, `<div class="tw" role="region" aria-label="复核结论" tabindex="0">
+        <table><thead><tr><th>candidate</th><th>复核结论</th><th>原结论</th><th>读写</th><th>复现</th><th>原因</th></tr></thead>
+        <tbody>${reviewRows || '<tr><td colspan="6"><div class="empty">没有 reviews.json 记录</div></td></tr>'}</tbody></table>
+      </div>`, `<span class="meta">D3.5</span>`)}
+
+    ${section(`崩溃文件（${crashes.length}）`, `<div class="tw" role="region" aria-label="崩溃文件" tabindex="0">
+        <table><thead><tr><th>文件</th><th>大小</th><th>stack_hash</th><th>结论</th><th>根因帧</th><th>日志</th></tr></thead>
+        <tbody>${crashRows || '<tr><td colspan="6"><div class="empty">crashes/ 下没有 *.bin</div></td></tr>'}</tbody></table>
+      </div>
+      <p class="note" style="margin:14px 0 0">崩溃条数只是候选数量；confirmed 仅表示写入型越界在干净构建 3/3 复现。</p>`, `<span class="meta">D2</span>`)}
+
+    ${section('Target 档案（target.json）', `<div class="fields">
+        ${field('目标名', esc(target.target || '—'))}
+        ${field('源码数', esc(target.source_count ?? '—'))}
+        ${field('入口', (target.entries || []).map(e => `${esc(e.file)}:${esc(e.line)}`).join(', ') || '—')}
+        ${field('格式', (target.formats || []).join(', ') || '—')}
+      </div>
+      <div class="tw" style="margin-top:18px" role="region" aria-label="二进制清单" tabindex="0">
+        <table><thead><tr><th>二进制</th><th>大小</th><th>sha256</th></tr></thead>
+        <tbody>${binRows || '<tr><td colspan="3"><div class="empty">没有 binaries 记录</div></td></tr>'}</tbody></table>
+      </div>`, `<span class="meta">D0</span>`)}
+
+    <footer class="workspace-footer"><span><i></i>只读证据视图 · 不修改 campaign 状态</span>
+      <span><a href="discovery-findings.html">查看全部崩溃 ${icon('arrow')}</a></span></footer>`;
+}
+
+if (!ID) {
+  renderHeader('discovery-campaigns', { title: 'Campaign 详情', sub: '缺少 id 参数' });
+  $('#content').innerHTML = '<div class="error" role="alert"><b>没有选择 Campaign</b><p>请从 <a href="discovery-campaigns.html">Campaign 列表</a> 进入。</p></div>';
+} else {
+  api(`/api/discovery/campaigns/${encodeURIComponent(ID)}?dir=${encodeURIComponent(DIR)}`)
+    .then(d => {
+      renderDetail(d);
+      api('/api/cases').then(cs => renderProjects(cs.items)).catch(() => {});
+    })
+    .catch(e => {
+      renderHeader('discovery-campaigns', { title: '未找到 Campaign', sub: ID });
+      $('#content').innerHTML = `<div class="error" role="alert"><b>${esc(ID)} 不存在</b>
+        <p>${esc(e.message)}</p><a href="discovery-campaigns.html">返回 Campaign 列表</a></div>`;
+    });
+}
+</script>
+</body>
+</html>

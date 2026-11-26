@@ -1,0 +1,90 @@
+{
+  "schema": "vulnmap.verify.v1",
+  "verdict": "pass",
+  "infra_error": false,
+  "reason": "",
+  "evidence": {
+    "vul_asan": "==7==ERROR: AddressSanitizer: heap-buffer-overflow on address 0x6180000007a0 at pc 0x00000052450c bp 0x7fff341c97f0 sp 0x7fff341c8fb8",
+    "fix_clean": true,
+    "root_cause": "weak"
+  },
+  "root_cause": {
+    "matched": true,
+    "confidence": "weak",
+    "reason": "first_user_frame_matches_sink_but_line_off",
+    "evidence": {
+      "diagnosis": {
+        "sanitizer": "AddressSanitizer",
+        "kind": "heap-buffer-overflow",
+        "write": true
+      },
+      "cwe_expected": [
+        "CWE-122",
+        "CWE-125"
+      ],
+      "cwe_claimed": "CWE-122",
+      "sink": {
+        "file": "binutils-gdb/gas/dwarf2dbg.c",
+        "line": 693,
+        "symbol": "memset",
+        "function": "assign_file_to_slot"
+      },
+      "first_user_frame": {
+        "func": "assign_file_to_slot",
+        "file": "/src/binutils-gdb/gas/dwarf2dbg.c",
+        "line": 690
+      },
+      "line_delta": -3
+    },
+    "provenance": {
+      "run_id": "r-caac24104b33d117ba29",
+      "binary_sha256": "f2f78ac2078400df1de759f6b12f2f3a7dd1758acd2ca69e8fe0b376a89f4779",
+      "source_sha256": "8b7735349651dcfb3da02753189f69b52fafca9cdddcd875dd35170b0bbb0579",
+      "image_digest": "sha256:d7406e0e71dabe5f8af5557e8aeb59d6e5d181f66b5a17953f034215e5ec6207",
+      "log": "logs/V4.gas-file4294967289.47101-vul.log",
+      "matches": true
+    }
+  },
+  "fix_root_cause": {},
+  "candidates_tried": 1,
+  "poc": {
+    "path": "artifacts/verify/gas-file4294967289.bin",
+    "sha256": "7c3d6ff89a4f70cbfd8eb879c3d806633abf8d96b37a1f570106b0882ddbf622",
+    "size": 56
+  },
+  "vul": {
+    "exit_code": 1,
+    "asan": "==7==ERROR: AddressSanitizer: heap-buffer-overflow on address 0x6180000007a0 at pc 0x00000052450c bp 0x7fff341c97f0 sp 0x7fff341c8fb8",
+    "log": "logs/V4.gas-file4294967289.47101-vul.log"
+  },
+  "fix": {
+    "exit_code": 0,
+    "log": "logs/V4.gas-file4294967289.47101-fix.log"
+  },
+  "notes": "gas-file4294967289",
+  "claim_source_mode": "rule",
+  "candidates": [
+    {
+      "candidate": "gas-file4294967289",
+      "claim_id": "c-1",
+      "subject": "assign_file_to_slot",
+      "proposed_by": "rule",
+      "evidence_source": "description",
+      "input_sha256": "7c3d6ff89a4f70cbfd8eb879c3d806633abf8d96b37a1f570106b0882ddbf622",
+      "vul_exit": 1,
+      "fix_exit": 0,
+      "verdict": "pass",
+      "reason": ""
+    }
+  ],
+  "model_loop": {},
+  "claim_used": {
+    "id": "c-1",
+    "subject": "assign_file_to_slot",
+    "proposed_by": "rule",
+    "evidence_source": "description"
+  },
+  "upstream": {
+    "artifacts/locate/findings.json": "deacc54ee4b8bb0a8413bd0521cb2811848703002e51ea6835a76324441f644e"
+  }
+}

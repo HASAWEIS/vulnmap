@@ -1,0 +1,5 @@
+{
+  "schema": "vulnmap.active_config.v1",
+  "sample": "alpha",
+  "observation_points": ["input_processed"]
+}

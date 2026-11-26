@@ -1,0 +1,8 @@
+{
+  "schema": "vulnmap.sample_catalog.v1",
+  "samples": [
+    {"id": "alpha", "path": "samples/alpha.txt"},
+    {"id": "beta", "path": "samples/beta.txt"},
+    {"id": "gamma", "path": "samples/gamma.txt"}
+  ]
+}

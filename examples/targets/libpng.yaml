@@ -1,0 +1,18 @@
+# P4 示例：libpng 1.6.37（预构建 ASAN+trace-pc 对象）
+name: libpng-1.6.37
+root: /tmp/libpng-1.6.37
+format: png
+includes:
+  - .
+build:
+  mode: api
+  harness_path: harness.c
+  extra_objs_glob: "*.o"
+  exclude_objs:
+    - pngtest.o
+  libs:
+    - -lz
+    - -lm
+fuzz:
+  seconds: 60
+  workers: 4

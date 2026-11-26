@@ -1,0 +1,161 @@
+{
+  "schema": "vulnmap.verify.v1",
+  "verdict": "pass",
+  "infra_error": false,
+  "reason": "",
+  "evidence": {
+    "vul_asan": "==7==ERROR: AddressSanitizer: heap-buffer-overflow on address 0x6140000001e8 at pc 0x0000006d8083 bp 0x7ffe0f54fbc0 sp 0x7ffe0f54fbb8",
+    "fix_clean": true,
+    "root_cause": "strong"
+  },
+  "root_cause": {
+    "matched": true,
+    "confidence": "strong",
+    "reason": "first_user_frame_matches_sink",
+    "evidence": {
+      "diagnosis": {
+        "sanitizer": "AddressSanitizer",
+        "kind": "heap-buffer-overflow",
+        "write": true
+      },
+      "cwe_expected": [
+        "CWE-122",
+        "CWE-125"
+      ],
+      "cwe_claimed": "CWE-122",
+      "sink": {
+        "file": "graphicsmagick/magick/render.c",
+        "line": 942,
+        "symbol": "ConvertPrimitiveToPath",
+        "function": "ConvertPrimitiveToPath"
+      },
+      "first_user_frame": {
+        "func": "ConvertPrimitiveToPath",
+        "file": "/src/graphicsmagick/magick/render.c",
+        "line": 942
+      },
+      "line_delta": 0
+    },
+    "provenance": {
+      "run_id": "r-67cd794848e503af4c82",
+      "binary_sha256": "f73d8ec5799c5b2afc237e08f75c1b36990fcbb6102abada7cdd3044e4a28365",
+      "source_sha256": "3f71a14cf166ccca40f950ce96153b152a8c821bd8b8c34846da52b3f9bdc217",
+      "image_digest": "sha256:8c9357d9a389df12596c9d9d58a0520f9d13fab6e3b2576ef7b8e0164ffe8105",
+      "log": "logs/V4.model-loop-r2.10096-vul.log",
+      "matches": true
+    }
+  },
+  "fix_root_cause": {},
+  "candidates_tried": 1,
+  "poc": {
+    "path": "artifacts/verify/model-loop-r2.bin",
+    "sha256": "a9fce3b59118054fb6477861c5f025f941243b6d39f7faa131dfdc8282861ddf",
+    "size": 500049
+  },
+  "vul": {
+    "exit_code": 1,
+    "asan": "==7==ERROR: AddressSanitizer: heap-buffer-overflow on address 0x6140000001e8 at pc 0x0000006d8083 bp 0x7ffe0f54fbc0 sp 0x7ffe0f54fbb8",
+    "log": "logs/V4.model-loop-r2.10096-vul.log"
+  },
+  "fix": {
+    "exit_code": 0,
+    "log": "logs/V4.model-loop-r2.10096-fix.log"
+  },
+  "notes": "model-loop-r2",
+  "claim_source_mode": "model_assisted",
+  "candidates": [
+    {
+      "candidate": "model-loop-r2",
+      "claim_id": "llm-1",
+      "subject": "ConvertPrimitiveToPath",
+      "proposed_by": "llm",
+      "evidence_source": "description+source_window",
+      "input_sha256": "a9fce3b59118054fb6477861c5f025f941243b6d39f7faa131dfdc8282861ddf",
+      "vul_exit": 1,
+      "fix_exit": 0,
+      "verdict": "pass",
+      "reason": ""
+    }
+  ],
+  "model_loop": {
+    "rounds": [
+      {
+        "round": 1,
+        "rationale": "{\"encoding\":\"text\",\"content\":\"push graphic-context\\nviewbox 0 0 640 480\\nstroke black\\nfill none\\npath 'M 0,0 L 10,10 L 20,20 L 30,30 L 40,40 L 50,50 L 60,60 L 70,70 L 80,80 L 90,90 L 100,100 L 110,110 L 120,120 L 130,130 L 140,140 L 150,150 L 160,160 L 170,170 L 180,180 L 190,190 L 200,200 L 210,21",
+        "encoding": "text",
+        "size": 0,
+        "sha256": "",
+        "llm_status": "ok",
+        "llm_tokens": 1931,
+        "verdict": "invalid_model_output",
+        "vul_exit": null,
+        "fix_exit": null,
+        "feedback": "must_use_recipe:format_has_builder; reply with {\"encoding\":\"recipe\",\"format\":\"mvg\",\"fields\":{...}}",
+        "crash_line": null
+      },
+      {
+        "round": 2,
+        "rationale": "ConvertPrimitiveToPath allocates path_info as (2*i+3) PathInfo entries where i counts primitive_info points. Each open subpath appends two ghost-line points (GhostlineCode + LineToCode) at indices n and n+1, then EndCode at n. With a very large number of coordinate segments in a single MVG path primitive, the per-subpath bookkeeping (coordinates/start/n) can push n past the 2*i+3 allocation, causing a heap buffer overflow (CWE-122) at path_info[n].code (line 942). Using the maximum segment count maximizes the chance of hitting the boundary.",
+        "encoding": "text",
+        "size": 500049,
+        "sha256": "a9fce3b59118054fb6477861c5f025f941243b6d39f7faa131dfdc8282861ddf",
+        "llm_status": "ok",
+        "llm_tokens": 1617,
+        "verdict": "pass",
+        "vul_exit": 1,
+        "fix_exit": 0,
+        "feedback": "vul_exit=1 fix_exit=0 | vul_diagnosis===6==ERROR: AddressSanitizer: heap-buffer-overflow on address 0x6140000001e8 at pc 0x0000006d8083 bp 0x7fff5e180120 sp 0x7fff5e180118 | root_cause=strong:first_user_frame_matches_sink",
+        "crash_line": 942
+      }
+    ],
+    "transcript": [
+      {
+        "round": 1,
+        "stage": "llm",
+        "status": "ok",
+        "tokens": 1931,
+        "error": ""
+      },
+      {
+        "round": 2,
+        "stage": "llm",
+        "status": "ok",
+        "tokens": 1617,
+        "error": ""
+      },
+      {
+        "round": 2,
+        "stage": "execute",
+        "rationale": "ConvertPrimitiveToPath allocates path_info as (2*i+3) PathInfo entries where i counts primitive_info points. Each open subpath appends two ghost-line points (GhostlineCode + LineToCode) at indices n and n+1, then EndCode at n. With a very large number of coordinate segments in a single MVG path primitive, the per-subpath bookkeeping (coordinates/start/n) can push n past the 2*i+3 allocation, causing a heap buffer overflow (CWE-122) at path_info[n].code (line 942). Using the maximum segment count maximizes the chance of hitting the boundary.",
+        "encoding": "text",
+        "size": 500049,
+        "sha256": "a9fce3b59118054fb6477861c5f025f941243b6d39f7faa131dfdc8282861ddf",
+        "llm_status": "ok",
+        "llm_tokens": 1617,
+        "verdict": "pass",
+        "vul_exit": 1,
+        "fix_exit": 0,
+        "feedback": "vul_exit=1 fix_exit=0 | vul_diagnosis===6==ERROR: AddressSanitizer: heap-buffer-overflow on address 0x6140000001e8 at pc 0x0000006d8083 bp 0x7fff5e180120 sp 0x7fff5e180118 | root_cause=strong:first_user_frame_matches_sink",
+        "crash_line": 942
+      }
+    ],
+    "total_rounds": 2,
+    "effective_rounds": 1,
+    "duplicates_rejected": 0,
+    "succeeded": true,
+    "winner_sha256": "a9fce3b59118054fb6477861c5f025f941243b6d39f7faa131dfdc8282861ddf",
+    "winner_round": 2,
+    "total_tokens": 3548,
+    "format": "mvg",
+    "claim_subject": "ConvertPrimitiveToPath"
+  },
+  "claim_used": {
+    "id": "llm-1",
+    "subject": "ConvertPrimitiveToPath",
+    "proposed_by": "llm",
+    "evidence_source": "description+source_window"
+  },
+  "upstream": {
+    "artifacts/locate/findings.json": "95c4cee243cc0b145b817db60dc4a186f122d84a23fe7b1292d10dcab1d9a986"
+  }
+}

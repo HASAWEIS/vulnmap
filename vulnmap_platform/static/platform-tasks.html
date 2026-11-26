@@ -1,0 +1,262 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>V2 任务 · vulnmap</title>
+<link rel="stylesheet" href="style.css?v=202611161150">
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar" id="sidebar"></aside>
+  <div class="main">
+    <header class="tophead" id="tophead"></header>
+    <div class="content" id="content"><div class="loading">正在读取任务库…</div></div>
+  </div>
+</div>
+<script src="app.js?v=202611161130"></script>
+<script>
+renderShell('platform-tasks', {
+  title: 'V2 任务',
+  sub: '任务提交与队列：提交只建 RECEIVED 任务，准入由按钮触发，执行由 CLI 或显式接口触发。'
+});
+
+const BENCH = [
+  ['cybergym', 'CyberGym'], ['exploitgym', 'ExploitGym'],
+  ['vulngym', 'VulnGym'], ['target_yaml', 'target.yaml'],
+];
+const MODES = [['fuzz', 'fuzz'], ['dynamic', 'dynamic'], ['static', 'static'], ['replay', 'replay']];
+const STATES = ['RECEIVED', 'PREFLIGHT', 'READY', 'UNDERSTANDING', 'HYPOTHESES', 'PLANNED',
+  'RUNNING', 'CANDIDATE', 'VERIFYING', 'REVIEW', 'REPORTED', 'CLOSED',
+  'BLOCKED', 'FAILED', 'NO_REPRO', 'NEEDS_EVIDENCE', 'REJECTED'];
+let STATE_FILTER = '', QUERY = '';
+
+function options(list, selected) {
+  return list.map(([v, t]) => `<option value="${esc(v)}" ${v === selected ? 'selected' : ''}>${esc(t)}</option>`).join('');
+}
+
+function formHTML() {
+  return `<form id="task-form" class="pf-form" autocomplete="off">
+    <div class="pf-field"><label for="f-bench">Benchmark</label>
+      <select id="f-bench" name="benchmark">${options(BENCH, 'target_yaml')}</select></div>
+    <div class="pf-field wide"><label for="f-target">目标（本地路径或 http(s) 服务地址）</label>
+      <input id="f-target" name="target" required placeholder="workspace/CG-01-arvo-44034 或 http://127.0.0.1:8000"></div>
+    <div class="pf-field"><label for="f-id">任务 ID（留空自动生成）</label>
+      <input id="f-id" name="task_id" placeholder="v2-demo-01" pattern="[A-Za-z0-9][A-Za-z0-9._:-]{1,120}"></div>
+    <div class="pf-field"><label for="f-mode">执行模式</label>
+      <select id="f-mode" name="mode">${options(MODES, 'fuzz')}</select></div>
+    <div class="pf-field"><label for="f-seconds">预算 · 秒</label>
+      <input id="f-seconds" name="max_seconds" type="number" min="1" value="3600"></div>
+    <div class="pf-field"><label for="f-execs">预算 · 执行次数</label>
+      <input id="f-execs" name="max_execs" type="number" min="1" value="1000000"></div>
+    <div class="pf-field"><label for="f-tokens">预算 · tokens</label>
+      <input id="f-tokens" name="max_tokens" type="number" min="1" value="2000000"></div>
+    <div class="pf-field"><label for="f-turns">预算 · 轮次</label>
+      <input id="f-turns" name="max_turns" type="number" min="1" value="40"></div>
+    <div class="pf-field wide"><label for="f-meta">元数据（每行 key=value，可选）</label>
+      <textarea id="f-meta" name="meta" placeholder="authorized=true&#10;image_vul=registry/arvo:44034-vul"></textarea></div>
+  </form>
+  <div class="pf-actions">
+    <button class="pf-btn primary" type="submit" form="task-form">提交任务（RECEIVED）</button>
+    <span class="pf-hint">提交只写 tasks + task.created 事件；不跑目标。准入按钮走 preflight 闸门。</span>
+  </div>
+  <div class="pf-auth-row"><span class="pf-hint" id="pf-auth">读取鉴权模式…</span></div>
+  <div class="pf-job-token">
+    <label for="pf-token">API token（服务端设置了 PLATFORM_API_TOKEN 时必填；只存本浏览器 localStorage，键名 platform_token）</label>
+    <div class="pf-row-actions">
+      <input id="pf-token" type="password" autocomplete="off" spellcheck="false" placeholder="本地开放模式可留空">
+      <button class="pf-btn" type="button" onclick="saveToken()">保存 token</button>
+      <span class="pf-hint" id="pf-token-note">—</span>
+    </div>
+  </div>`;
+}
+
+function metricsHTML(t) {
+  const by = t.by_state || {};
+  const cards = [
+    ['任务', t.tasks || 0, '全部任务'],
+    ['就绪', by.READY || 0, 'READY'],
+    ['执行中', (by.RUNNING || 0) + (by.CANDIDATE || 0) + (by.VERIFYING || 0), 'RUNNING/CANDIDATE/VERIFYING'],
+    ['已出包', (by.REPORTED || 0) + (by.CLOSED || 0), 'REPORTED/CLOSED'],
+  ];
+  return cards.map(([k, v, n]) => `<div class="pf-kpi"><span>${esc(k)}</span><b>${esc(v)}</b><span>${esc(n)}</span></div>`).join('');
+}
+
+function rowHTML(t) {
+  const c = t.counts || {};
+  const actions = [`<a class="pf-btn" href="${taskHref('platform-task.html', t.task_id)}">详情</a>`,
+    `<a class="pf-btn" href="${taskHref('platform-events.html', t.task_id)}">事件</a>`];
+  if (t.state === 'RECEIVED') actions.push(`<button class="pf-btn" type="button" onclick="preflight('${esc(t.task_id)}')">准入</button>`);
+  return `<tr>
+    <td><a class="case-link" href="${taskHref('platform-task.html', t.task_id)}">${esc(t.task_id)}${icon('arrow')}</a>
+      <span class="cell-secondary">${esc(t.mode)} · ${esc(t.created_at)}</span></td>
+    <td class="mono">${esc(t.benchmark)}</td>
+    <td class="mono task-cell" title="${esc(t.target)}">${esc(t.target)}</td>
+    <td>${stateBadge(t.state)}</td>
+    <td class="mono">${esc(c.events || 0)} / ${esc(c.evidence || 0)} / ${esc(c.candidates || 0)}</td>
+    <td class="mono">${esc(t.updated_at)}</td>
+    <td><div class="pf-row-actions">${actions.join('')}</div></td>
+  </tr>`;
+}
+
+function render() {
+  $('#content').innerHTML = `
+    <section class="panel cases-panel" style="margin-bottom:20px">
+      <div class="panel-hd"><div><h2>提交任务</h2>
+        <p>任务接入闸门：benchmark + 目标 + 预算。提交后状态 RECEIVED，不会自动执行。</p></div>
+        <span class="section-kicker">TASK INTAKE</span></div>
+      ${formHTML()}
+      <div class="pf-note" id="pf-result"></div>
+    </section>
+    <section class="panel cases-panel">
+      <div class="panel-hd"><div><h2>任务队列 <span class="count-label" id="pf-count">—</span></h2>
+        <p>读取 <code class="mono">PLATFORM_ROOT/platform.db</code> 的 tasks 表；状态由运行时写，页面只读。</p></div>
+        <a class="pf-btn" href="platform-tasks.html">刷新</a></div>
+      <div class="pf-kpis" id="pf-metrics"></div>
+      <div class="case-tools">
+        <div class="filter-tabs" role="group" aria-label="按状态筛选">
+          <button class="case-filter ${STATE_FILTER === '' ? 'on' : ''}" onclick="setState('')">全部</button>
+          ${STATES.map(s => `<button class="case-filter ${STATE_FILTER === s ? 'on' : ''}" onclick="setState('${s}')">${esc(stateLabel(s))}</button>`).join('')}
+        </div>
+        <div class="case-search">${icon('search')}
+          <input id="pf-search" type="search" value="${esc(QUERY)}" placeholder="搜索任务 / target / benchmark…" aria-label="搜索任务"></div>
+      </div>
+      <div class="tw" role="region" aria-label="任务队列" tabindex="0">
+        <table class="overview-table"><thead><tr>
+          <th scope="col">任务</th><th scope="col">Benchmark</th><th scope="col">Target</th>
+          <th scope="col">状态</th><th scope="col">事件 / 证据 / 候选</th><th scope="col">更新</th>
+          <th scope="col">操作</th>
+        </tr></thead><tbody id="pf-rows"><tr><td colspan="7"><div class="empty">正在读取任务…</div></td></tr></tbody></table>
+      </div>
+      <div class="table-footer"><span>只读消费 · 提交/准入动作打 API · 不直接改 DB</span>
+        <span class="scope-link">GET /api/platform/tasks</span></div>
+    </section>`;
+
+  $('#task-form').onsubmit = submitTask;
+  $('#pf-search').oninput = e => { QUERY = e.target.value.trim().toLowerCase(); paintRows(); };
+  load();
+}
+
+function setState(s) { STATE_FILTER = s; render(); }
+
+let ALL = [];
+
+function matches(t) {
+  if (!QUERY) return true;
+  return [t.task_id, t.target, t.benchmark].some(v => String(v || '').toLowerCase().includes(QUERY));
+}
+
+function paintRows() {
+  const rows = ALL.filter(matches);
+  $('#pf-count').textContent = rows.length;
+  $('#pf-rows').innerHTML = rows.length ? rows.map(rowHTML).join('')
+    : '<tr><td colspan="7"><div class="empty">还没有任务。用上面的表单提交一个（提交不会执行目标）。</div></td></tr>';
+}
+
+function authHTML(a) {
+  if (!a) return '';
+  const need = !!a.token_required;
+  return `${badge(need ? '需要 Bearer token' : '本地开放', need ? 'b-warn' : 'b-ok')}
+    <span class="mono">${esc(a.env || '')}</span> · ${esc(a.note || '')}`;
+}
+
+function saveToken() {
+  const input = $('#pf-token');
+  const value = input ? String(input.value || '').trim() : '';
+  try {
+    if (value) localStorage.setItem(PLATFORM_TOKEN_KEY, value);
+    else localStorage.removeItem(PLATFORM_TOKEN_KEY);
+    showResult(`<div class="note info">${value ? '已保存 token：写请求会带 Bearer 头' : '已清除 token：写请求不带鉴权头'}</div>`);
+  } catch (e) {
+    showResult(`<div class="note bad">保存 token 失败：${esc(e.message)}</div>`);
+  }
+  paintToken();
+}
+
+function paintToken() {
+  const note = $('#pf-token-note');
+  if (note) note.textContent = platformToken() ? '已保存：写请求会带 Bearer 头' : '未保存：写请求不带鉴权头';
+}
+
+async function load() {
+  const qs = STATE_FILTER ? '?state=' + encodeURIComponent(STATE_FILTER) + '&limit=200' : '?limit=200';
+  try {
+    const d = await api('/api/platform/tasks' + qs);
+    ALL = d.items || [];
+    $('#pf-metrics').innerHTML = metricsHTML(d.totals || {});
+    const authEl = $('#pf-auth');
+    if (authEl) authEl.innerHTML = authHTML(d.auth);
+    paintToken();
+    paintRows();
+    if (d.exists === false) {
+      $('#pf-rows').innerHTML = '<tr><td colspan="7"><div class="empty">任务库尚未创建：提交第一个任务后会自动建库。</div></td></tr>';
+    }
+  } catch (e) {
+    fail($('#content'), e);
+  }
+}
+
+function showResult(html) { const el = $('#pf-result'); if (el) el.innerHTML = html; }
+
+function metaFrom(text) {
+  const meta = {};
+  for (const line of String(text || '').split('\n')) {
+    const s = line.trim();
+    if (!s) continue;
+    const i = s.indexOf('=');
+    if (i < 1) throw new Error('元数据必须是 key=value：' + s);
+    meta[s.slice(0, i).trim()] = s.slice(i + 1).trim();
+  }
+  return meta;
+}
+
+async function submitTask(ev) {
+  ev.preventDefault();
+  const fd = new FormData($('#task-form'));
+  const num = k => { const v = String(fd.get(k) || '').trim(); return v ? Number(v) : undefined; };
+  let body;
+  try {
+    body = {
+      benchmark: fd.get('benchmark'), target: String(fd.get('target') || '').trim(),
+      mode: fd.get('mode'), metadata: metaFrom(fd.get('meta')),
+      budget: { max_seconds: num('max_seconds'), max_execs: num('max_execs'),
+        max_tokens: num('max_tokens'), max_turns: num('max_turns') },
+    };
+    const id = String(fd.get('task_id') || '').trim();
+    if (id) body.task_id = id;
+  } catch (e) { showResult(`<div class="note bad">${esc(e.message)}</div>`); return; }
+  try {
+    const r = await postJSON('/api/platform/tasks', body);
+    const t = r.task;
+    showResult(`<div class="note info">已提交 <b class="mono">${esc(t.task_id)}</b>（state=${esc(t.state)}，event_seq=${esc(r.event_seq)}）。
+      <div class="pf-row-actions" style="margin-top:10px">
+        <button class="pf-btn primary" type="button" onclick="preflight('${esc(t.task_id)}')">运行准入检查</button>
+        <a class="pf-btn" href="${taskHref('platform-task.html', t.task_id)}">查看任务详情</a>
+      </div></div>`);
+    await load();
+  } catch (e) {
+    showResult(`<div class="note bad">提交失败：${esc(e.message)}</div>`);
+  }
+}
+
+async function preflight(id) {
+  try {
+    const r = await postJSON('/api/platform/tasks/' + encodeURIComponent(id) + '/preflight', {});
+    const bad = (r.blockers || []).length > 0;
+    const checks = (r.checks || []).map(c => `${c.ok ? '✓' : '✕'} ${c.name}: ${c.detail}`).join('\n');
+    showResult(`<div class="note ${bad ? 'bad' : 'info'}">准入结果 <b class="mono">${esc(id)}</b> → <b>${esc(r.state)}</b>；
+      blockers: ${esc((r.blockers || []).join(', ') || '无')}
+      <pre class="pf-pre inline" style="margin-top:10px">${esc(checks)}</pre>
+      <div class="pf-row-actions" style="margin-top:10px"><a class="pf-btn" href="${taskHref('platform-task.html', id)}">查看任务详情</a></div></div>`);
+    await load();
+  } catch (e) {
+    showResult(`<div class="note bad">准入失败：${esc(e.message)}</div>`);
+  }
+}
+
+window.preflight = preflight;
+window.saveToken = saveToken;
+render();
+</script>
+</body>
+</html>

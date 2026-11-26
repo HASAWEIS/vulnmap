@@ -1,0 +1,20 @@
+# P2 真实目标：libtiff 4.0.9（ASAN+trace-pc 静态库）
+name: libtiff-4.0.9
+root: /tmp/tiff-4.0.9
+format: tiff
+sources:
+  - harness.c
+includes:
+  - libtiff
+build:
+  mode: main
+  extra_objs:
+    - libtiff/.libs/libtiff.a
+    - port/.libs/libport.a
+  libs:
+    - -lz
+    - -lm
+fuzz:
+  seconds: 120
+  workers: 4
+  timeout: 2.0

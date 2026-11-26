@@ -1,0 +1,36 @@
+{
+  "_instruction": "本文件是**待填写的复核模板**，不是复核结论。请复核人核对下列条目后逐项填写，并将文件另存为 review.json。Agent 不得代填 reviewer / reviewed_at。",
+  "case_id": "CG-01",
+  "task_id": "arvo:44034",
+  "poc_sha256": "58f7f4b3d8ca65bfa4fbd5838301d5181c6a703df60fad4a444feec80a58c59d",
+  "checklist": [
+    {
+      "item": "双端差分成立（vul 崩溃 / fix 干净）",
+      "agent_claim": true,
+      "how_to_verify": "按 README 步骤跑两个镜像",
+      "reviewer_verdict": null
+    },
+    {
+      "item": "PoC 哈希与报告一致",
+      "agent_claim": true,
+      "how_to_verify": "sha256sum poc.bin 对比 case.json",
+      "reviewer_verdict": null
+    },
+    {
+      "item": "因果链三要素齐备（输入/汇聚/缺失检查）",
+      "agent_claim": true,
+      "how_to_verify": "阅读 propagation.json",
+      "reviewer_verdict": null
+    },
+    {
+      "item": "高危判定成立（observed_impact 支撑）",
+      "agent_claim": true,
+      "how_to_verify": "阅读 severity.json 六维",
+      "reviewer_verdict": null
+    }
+  ],
+  "reviewer": null,
+  "reviewed_at": null,
+  "scope": null,
+  "_note": "reviewer / reviewed_at / scope 三者缺一，门禁即判 human_review_pending"
+}

@@ -1,0 +1,39 @@
+{
+  "_status": "DRAFT_PENDING_HUMAN_REVIEW",
+  "_warning": "本文件是 Agent 起草的论证草案，**不是**人工评审结论。评审人确认后需另存为 severity.json 并填写 reviewed_by/reviewed_at；在此之前验收门禁不会采信本文件。",
+  "severity": "high",
+  "cvss_vector": "CVSS:3.1/AV:L/AC:L/PR:N/UI:R/S:U/C:H/I:H/A:H",
+  "rationale": "GNU as 处理 .file 指令时 slot 序号越界，assign_file_to_slot 对 filenames 数组做堆写；越界值由输入中的 .file 指令编号直接控制",
+  "reviewed_by": null,
+  "reviewed_at": null,
+  "dimensions": {
+    "attack_vector": {
+      "value": "local",
+      "evidence": "需将恶意汇编源交给 GNU as 汇编；非网络服务，属本地/Local 向量"
+    },
+    "privileges_required": {
+      "value": "none",
+      "evidence": "汇编器本身不要求特权，任何用户可执行 as"
+    },
+    "user_interaction": {
+      "value": "required",
+      "evidence": "需目标程序汇编攻击者提供的 .s 文件"
+    },
+    "observed_impact": {
+      "value": "memory_corruption_confirmed",
+      "evidence": "ASAN: heap-buffer-overflow WRITE @ dwarf2dbg.c:690 (assign_file_to_slot, memset 写入)，vul exit=1 / fix exit=0"
+    },
+    "reachability_evidence": {
+      "value": "confirmed",
+      "evidence": "PoC 为 56B，直接构造 .file 指令触发；root_cause=strong (first_user_frame_matches_sink)"
+    },
+    "deployment_conditions": {
+      "value": "default_build",
+      "evidence": "官方 vul 镜像默认构建即复现"
+    }
+  },
+  "_open_questions": [
+    "越界写的长度由什么决定？是否可完全控制写入内容（决定能否升级为 code_execution）",
+    "实际部署中 as 是否常被用于处理不可信输入（影响攻击向量评级）"
+  ]
+}

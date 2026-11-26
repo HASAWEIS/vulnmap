@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Findings / Crashes · vulnmap</title>
+<link rel="stylesheet" href="style.css?v=202611161150">
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar" id="sidebar"></aside>
+  <div class="main">
+    <header class="tophead" id="tophead"></header>
+    <div class="content" id="content"><div class="loading">汇总崩溃证据…</div></div>
+  </div>
+</div>
+<script src="app.js?v=202611161130"></script>
+<script>
+renderShell('discovery-findings', {
+  title: 'Findings / Crashes',
+  sub: '每个 crash-*.bin 一行；triage 结论按 input_sha256 对齐，不另存状态。'
+});
+
+const FILTERS = [['all', '全部'], ['confirmed', 'confirmed'], ['weakened', 'weakened'], ['untriaged', '未分诊']];
+let ROWS = [], FILTER = 'all', QUERY = '';
+
+const verdictBadge = v => badge(v || '未分诊',
+  v === 'confirmed' ? 'b-ok' : v === 'weakened' ? 'b-warn' : v === 'excluded' ? 'b-bad' : 'b-dim');
+const campaignHref = (c, extra = '') =>
+  `discovery-campaign.html?id=${encodeURIComponent(c.id)}&dir=${encodeURIComponent(c.key)}${extra}`;
+
+function match(r) {
+  if (FILTER === 'confirmed') return r.verdict === 'confirmed';
+  if (FILTER === 'weakened') return r.verdict === 'weakened';
+  if (FILTER === 'untriaged') return !r.verdict;
+  return true;
+}
+
+function renderRows() {
+  const q = QUERY.toLowerCase().trim();
+  const items = ROWS.filter(match).filter(r => !q ||
+    [r.campaign, r.key, r.name, r.stack, r.function, r.verdict]
+      .some(v => String(v || '').toLowerCase().includes(q)));
+  $('#rows').innerHTML = items.length ? items.map(r => `<tr>
+      <td><a class="case-link" href="${campaignHref(r)}">${esc(r.campaign)}${icon('arrow')}</a>
+        <span class="cell-secondary">${esc(r.key)}</span></td>
+      <td class="mono" style="white-space:normal;word-break:break-all">${esc(r.name)}</td>
+      <td class="mono">${esc(r.size)} B</td>
+      <td class="mono">${esc(r.stack || '—')}</td>
+      <td>${verdictBadge(r.verdict)}</td>
+      <td class="mono">${esc(r.access || '—')}</td>
+      <td class="mono">${esc(r.function || '—')}:${esc(r.line ?? '—')}</td>
+      <td class="mono">${esc(r.log || '—')}</td>
+    </tr>`).join('') : '<tr><td colspan="8"><div class="empty">没有匹配的崩溃记录</div></td></tr>';
+  $('#count').textContent = `${items.length} 个结果`;
+  $$('.case-filter').forEach(b => {
+    const on = b.dataset.filter === FILTER;
+    b.classList.toggle('on', on);
+    b.setAttribute('aria-pressed', String(on));
+  });
+}
+
+function render() {
+  const count = k => { const old = FILTER; FILTER = k; const n = ROWS.filter(match).length; FILTER = old; return n; };
+  const confirmed = ROWS.filter(r => r.verdict === 'confirmed').length;
+  const weakened = ROWS.filter(r => r.verdict === 'weakened').length;
+  const untriaged = ROWS.filter(r => !r.verdict).length;
+  const campaigns = new Set(ROWS.map(r => r.key)).size;
+  const metrics = [
+    ['崩溃文件', ROWS.length, 'crashes/crash-*.bin', 'discovery-findings'],
+    ['Confirmed', confirmed, '干净构建 3/3 复现', 'shield'],
+    ['Weakened', weakened, '读/UB 或未稳定', 'lab'],
+    ['未分诊', untriaged, '缺少 triage 匹配', 'search'],
+    ['涉及 Campaign', campaigns, '有崩溃落盘的证据目录', 'cases'],
+  ].map(([label, value, desc, ic]) => `<div class="metric">
+      <div class="metric-top"><span>${esc(label)}</span>${icon(ic)}</div>
+      <div class="metric-value">${esc(value)}<span>个</span></div><p>${esc(desc)}</p></div>`).join('');
+
+  $('#content').innerHTML = `
+    <section class="workspace-strip"><div><span class="status-ring"></span>
+      <strong>崩溃证据</strong><span>只读汇总 discovery/**/crashes；verdict 来自同目录 triage.json。</span></div>
+      <a href="discovery-campaigns.html">Campaign 列表 ${icon('arrow')}</a></section>
+    <section class="metrics-grid">${metrics}</section>
+    <section class="panel cases-panel">
+      <div class="panel-hd"><div><h2>Findings / Crashes <span class="count-label">${ROWS.length}</span></h2>
+        <p>崩溃条数只是候选数量，不等于高危数；confirmed 只代表写入型越界在干净构建复现。</p></div>
+        <a class="button-link" href="discovery-reports.html">报告阅读器 ${icon('arrow')}</a></div>
+      <div class="case-tools">
+        <div class="filter-tabs" role="group" aria-label="筛选分诊结论">
+          ${FILTERS.map(([k, t]) => `<button class="case-filter ${k === FILTER ? 'on' : ''}" data-filter="${k}"
+            aria-pressed="${k === FILTER}" onclick="setFilter('${k}')">${t} ${count(k)}</button>`).join('')}
+        </div>
+        <div class="case-search">${icon('search')}
+          <input id="search" type="search" value="${esc(QUERY)}" placeholder="搜索 campaign / 文件 / stack_hash…" aria-label="搜索崩溃记录">
+        </div>
+      </div>
+      <div class="tw" role="region" aria-label="崩溃记录" tabindex="0">
+        <table class="overview-table"><thead><tr>
+          <th scope="col">Campaign / 目录</th><th scope="col">崩溃文件</th><th scope="col">大小</th>
+          <th scope="col">stack_hash</th><th scope="col">结论</th><th scope="col">访问类型</th>
+          <th scope="col">根因帧</th><th scope="col">日志</th>
+        </tr></thead><tbody id="rows"></tbody></table>
+      </div>
+      <div class="table-footer"><span id="count"></span>
+        <span class="note" style="margin:0;border:0;background:none;padding:0">数据来自 /api/discovery/campaigns/{id}/crashes</span></div>
+    </section>
+    <footer class="workspace-footer"><span><i></i>只读模式 · 不修改验收状态</span>
+      <span>找不到结论时显示「未分诊」，不推断 verdict</span></footer>`;
+  $('#search').oninput = e => { QUERY = e.target.value; renderRows(); };
+  renderRows();
+}
+
+function setFilter(k) { FILTER = k; renderRows(); }
+
+api('/api/discovery/campaigns').then(async d => {
+  api('/api/cases').then(cs => renderProjects(cs.items)).catch(() => {});
+  const campaigns = d.items || [];
+  const results = await Promise.all(campaigns.map(c =>
+    api(`/api/discovery/campaigns/${encodeURIComponent(c.id)}/crashes?dir=${encodeURIComponent(c.key)}`)
+      .catch(() => ({ crashes: [] }))));
+  ROWS = [];
+  campaigns.forEach((c, i) => {
+    for (const x of (results[i].crashes || [])) {
+      ROWS.push({
+        campaign: c.id, key: c.key, name: x.name, size: x.size,
+        stack: x.triage?.stack_hash || '', verdict: x.triage?.verdict || '',
+        access: x.triage?.access || '', function: x.triage?.function || '',
+        line: x.triage?.line, log: x.log?.name || '',
+      });
+    }
+  });
+  render();
+}).catch(e => fail($('#content'), e));
+</script>
+</body>
+</html>

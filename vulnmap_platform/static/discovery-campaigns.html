@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Campaign 列表 · vulnmap</title>
+<link rel="stylesheet" href="style.css?v=202611161150">
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar" id="sidebar"></aside>
+  <div class="main">
+    <header class="tophead" id="tophead"></header>
+    <div class="content" id="content"><div class="loading">加载 Discovery 证据目录…</div></div>
+  </div>
+</div>
+<script src="app.js?v=202611161130"></script>
+<script>
+renderShell('discovery-campaigns', {
+  title: 'Campaign 列表',
+  sub: '每个 campaign.json 一行；复跑副本按证据目录 key 区分，不合并、不去重。'
+});
+
+const FILTERS = [
+  ['all', '全部'], ['confirmed', '有 confirmed'], ['weakened', '有 weakened'],
+  ['crashes', '有崩溃文件'], ['no-report', '缺报告'],
+];
+let ALL = [], FILTER = 'all', QUERY = '', PAGE = 1;
+const PAGE_SIZE = 12;
+
+const matches = c => ({
+  all: true,
+  confirmed: Number(c.risk?.confirmed) > 0,
+  weakened: Number(c.risk?.weakened) > 0,
+  crashes: Number(c.crashes) > 0,
+  'no-report': !c.report?.available,
+}[FILTER]);
+
+function href(c) {
+  return `discovery-campaign.html?id=${encodeURIComponent(c.id)}&dir=${encodeURIComponent(c.key)}`;
+}
+
+function filtered() {
+  const q = QUERY.toLowerCase().trim();
+  return ALL.filter(matches).filter(c => !q ||
+    [c.id, c.key, c.target].some(v => String(v || '').toLowerCase().includes(q)));
+}
+
+function renderRows() {
+  const items = filtered();
+  const pages = Math.max(1, Math.ceil(items.length / PAGE_SIZE));
+  PAGE = Math.min(PAGE, pages);
+  const visible = items.slice((PAGE - 1) * PAGE_SIZE, PAGE * PAGE_SIZE);
+  $('#rows').innerHTML = visible.length ? visible.map(c => `<tr>
+      <td><a class="case-link" href="${href(c)}">${esc(c.id)}${icon('arrow')}</a>
+        <span class="cell-secondary">${esc(c.key)}</span></td>
+      <td class="mono task-cell" title="${esc(c.target || '')}">${esc(c.target || '—')}</td>
+      <td class="mono">${esc(c.coverage?.covered ?? '—')}/${esc(c.coverage?.planned ?? '—')}
+        <span class="cell-secondary">${esc(c.coverage?.status || '—')}</span></td>
+      <td>${badge(`${c.risk?.confirmed ?? 0} confirmed`, Number(c.risk?.confirmed) ? 'b-ok' : 'b-dim')}
+        ${badge(`${c.risk?.weakened ?? 0} weakened`, Number(c.risk?.weakened) ? 'b-warn' : 'b-dim')}</td>
+      <td class="mono">${esc(c.crashes ?? 0)}</td>
+      <td>${badge(c.report?.available ? 'report.md' : '缺失', c.report?.available ? 'b-ok' : 'b-warn')}</td>
+      <td>${esc(c.strategy || '—')}</td>
+      <td class="mono">${esc(c.isolation?.mode || '—')}</td>
+    </tr>`).join('') : '<tr><td colspan="8"><div class="empty">没有匹配的 Campaign</div></td></tr>';
+
+  $('#count').textContent = `${items.length} 个结果`;
+  $('#page').textContent = `第 ${PAGE} / ${pages} 页`;
+  $('#prev').disabled = PAGE === 1;
+  $('#next').disabled = PAGE === pages;
+  $$('.case-filter').forEach(b => {
+    const on = b.dataset.filter === FILTER;
+    b.classList.toggle('on', on);
+    b.setAttribute('aria-pressed', String(on));
+  });
+}
+
+function render() {
+  const counts = k => { const old = FILTER; FILTER = k; const n = ALL.filter(matches).length; FILTER = old; return n; };
+  $('#content').innerHTML = `
+    <section class="panel cases-panel">
+      <div class="panel-hd"><div><h2>Discovery Campaigns <span class="count-label">${ALL.length}</span></h2>
+        <p>读取 discovery/**/campaign.json；详情页直接读同目录证据文件。</p></div>
+        <a class="button-link" href="index.html">Discovery 总览 ${icon('arrow')}</a></div>
+      <div class="case-tools">
+        <div class="filter-tabs" role="group" aria-label="筛选 Campaign">
+          ${FILTERS.map(([k, t]) => `<button class="case-filter ${k === FILTER ? 'on' : ''}" data-filter="${k}"
+            aria-pressed="${k === FILTER}" onclick="setFilter('${k}')">${t} ${counts(k)}</button>`).join('')}
+        </div>
+        <div class="case-search">${icon('search')}
+          <input id="search" type="search" value="${esc(QUERY)}" placeholder="搜索 campaign id / 目录 / target…" aria-label="搜索 Campaign">
+        </div>
+      </div>
+      <div class="tw" role="region" aria-label="Campaign 列表" tabindex="0">
+        <table class="overview-table"><thead><tr>
+          <th scope="col">Campaign / 证据目录</th><th scope="col">Target</th><th scope="col">覆盖</th>
+          <th scope="col">分诊</th><th scope="col">崩溃</th><th scope="col">报告</th>
+          <th scope="col">策略</th><th scope="col">隔离</th>
+        </tr></thead><tbody id="rows"></tbody></table>
+      </div>
+      <div class="table-footer"><span id="count"></span>
+        <div class="pagination"><span id="page"></span>
+          <button id="prev" aria-label="上一页">‹</button><button id="next" aria-label="下一页">›</button></div>
+      </div>
+    </section>`;
+  $('#search').oninput = e => { QUERY = e.target.value; PAGE = 1; renderRows(); };
+  $('#prev').onclick = () => { PAGE--; renderRows(); };
+  $('#next').onclick = () => { PAGE++; renderRows(); };
+  renderRows();
+}
+
+function setFilter(k) { FILTER = k; PAGE = 1; render(); }
+
+api('/api/discovery/campaigns').then(d => {
+  ALL = d.items || [];
+  api('/api/cases').then(cs => renderProjects(cs.items)).catch(() => {});
+  render();
+}).catch(e => fail($('#content'), e));
+</script>
+</body>
+</html>

@@ -1,0 +1,26 @@
+# 二轮真实目标：libtiff 4.0.9 tif_getimage.c（RGBA）+ tiled 输入
+# harness 在 discovery/real-libtiff-rgba-r2/harness.c：
+#   TIFFRGBAImageOK/Begin/Get/End、TIFFReadRGBATile、TIFFReadRGBAStrip 三条路径，
+#   缓冲全部按库上报尺寸精确分配。
+# 说明：系统无 jpeglib.h（仅 libjpeg-turbo8 运行时），configure --enable-jpeg 无法通过，
+# 因此压缩路径覆盖的是既有构建已启用的 LZW / PackBits / Deflate / CCITT / Thunder /
+# PixarLog，而不是 JPEG；语料侧补了这些压缩的真实样本。
+name: libtiff-4.0.9-rgba-r2
+root: /tmp/tiff-4.0.9
+format: tiff
+sources:
+  - /home/root_bupt/桌面/file/vulnmap/discovery/real-libtiff-rgba-r2/harness.c
+includes:
+  - libtiff
+build:
+  mode: main
+  extra_objs:
+    - libtiff/.libs/libtiff.a
+    - port/.libs/libport.a
+  libs:
+    - -lz
+    - -lm
+fuzz:
+  seconds: 180
+  workers: 4
+  timeout: 2.0

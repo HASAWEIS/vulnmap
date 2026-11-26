@@ -1,0 +1,26 @@
+{
+  "source": "manual_review_of_source",
+  "verified_by": "manual",
+  "defect_kind": "memory_corruption",
+  "elements": {
+    "input_bytes": {
+      "value": "PDF 的 /BaseFont /AAAA...(4096 字节) —— BaseFont 名称长度由输入控制",
+      "evidence": "verify PoC artifacts/verify/pdf-basefont4096.bin（8882B，BaseFont 名 4096 字节）",
+      "verified_by": "manual",
+      "note": "CIDSystemInfo 的 Registry/Ordering 走另一分支，本案例走 BaseFont 分支"
+    },
+    "reaches_sink": {
+      "value": "pdfi_dict_get(font_dict,\"BaseFont\",&cidname) -> cidname->length -> memcpy(fontfname+fsprefixlen, cidname->data, cidname->length)",
+      "evidence": "pdf_font.c:180 取 BaseFont；:332 使用 cidname->data/length",
+      "verified_by": "manual"
+    },
+    "missing_check": {
+      "value": "同一函数内 Registry-Ordering 分支有 `csi_reg->length + csi_ord->length + 1 < gp_file_name_sizeof - 1` 边界检查（:189），BaseFont 分支对 cidname->length 无任何上限校验",
+      "evidence": "pdf_font.c:189 有检查 vs :332 无检查；fontfname 声明为 char[gp_file_name_sizeof] (:171)",
+      "verified_by": "manual",
+      "note": "fsprefixlen = strlen(\"CIDFont/\") = 8，故 cidname->length > 4088 即越界"
+    }
+  },
+  "verdict": "causal_chain_complete_by_manual_review",
+  "severity_note": "栈缓冲区写越界，长度与内容均由输入控制，可覆盖返回地址；实际可利用性需结合二进制缓解措施单独评估"
+}

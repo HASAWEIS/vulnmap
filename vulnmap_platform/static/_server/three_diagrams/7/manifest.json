@@ -1,0 +1,67 @@
+{
+  "version": "2026-11-16",
+  "files": {
+    "/home/root_bupt/桌面/file/平台图示_20261115/01_平台架构图.svg": {
+      "sha256": "a5d2b32a9d43c4d257f9d2ed3695249f3e8bf06da54981f8e6302c5a663e4cbf",
+      "bytes": 16095
+    },
+    "/home/root_bupt/桌面/file/平台图示_20261115/01_平台架构图.png": {
+      "sha256": "2d8b7b82f6c0e598087f0ceae311db77a9aa396f8f20e66379f0ab132109bdf6",
+      "bytes": 618421
+    },
+    "/home/root_bupt/桌面/file/平台图示_20261115/02_技术路线图.svg": {
+      "sha256": "c35f68ee91f6a293603295887f50d9c875b74fe19a2efb5bbeeb290473be78a9",
+      "bytes": 17991
+    },
+    "/home/root_bupt/桌面/file/平台图示_20261115/02_技术路线图.png": {
+      "sha256": "e8774842096bf00b09107e4e501b56b7558831c5a7bde5b45c80fe662cf5339e",
+      "bytes": 623755
+    },
+    "/home/root_bupt/桌面/file/平台图示_20261115/03_挖掘流程图.svg": {
+      "sha256": "78abd8af4ff9df7ab157a55bee1a53c07f29d2ec872bc7025b0efc3bdccb8b5b",
+      "bytes": 27789
+    },
+    "/home/root_bupt/桌面/file/平台图示_20261115/03_挖掘流程图.png": {
+      "sha256": "c975b3ddeafe50dc46f489b32d457c1fbc8864b263b507bd9c02fc120f5b057d",
+      "bytes": 613084
+    },
+    "/home/root_bupt/桌面/file/平台图示_20261115/平台当前方案汇报稿_20261116.md": {
+      "sha256": "0ec80d7fc2aa298cdb9c9d54e9e14ba8058d8255273bdc413451a5693593f607",
+      "bytes": 10669
+    },
+    "/home/root_bupt/桌面/file/平台图示_20261115/交付说明.md": {
+      "sha256": "0fcda137a850559ed22aba7b65967c81d8d0832e4f953dec261de2ec2b542e2d",
+      "bytes": 878
+    }
+  },
+  "source_evidence": {
+    "/home/root_bupt/桌面/file/vulnmap/agent/discovery/campaign.py": "d4f4dffb83b719d6e8d6e95958f8c6e32e2b357e11e81e890185dcaeee58b9e3",
+    "/home/root_bupt/桌面/file/vulnmap/agent/discovery/agents.py": "c6b53fa956185e203dcb7b604ed259cbdeae1188781b531527994674cbcac192",
+    "/home/root_bupt/桌面/file/vulnmap/agent/discovery/covfuzz.py": "572b6e89fd5664a260b6832ff2714aa5aeb93a66998d4ed6009a8a825e186fc1",
+    "/home/root_bupt/桌面/file/vulnmap/agent/discovery/isolation.py": "5f2a206aad57f1d910990c7f83c751e7fd9800765f409a2eb3b76fa2b00a3c47",
+    "/home/root_bupt/桌面/file/vulnmap/agent/discovery/triage.py": "b2abc54c4a13221b677b1fd25147e96de4853f59f6bc6dc137560feabdfecbe3",
+    "/home/root_bupt/桌面/file/vulnmap/agent/discovery/report.py": "21c9a121e9073becb3b9b12198d5825a31eff97e5509c6a377de3def77332189",
+    "/home/root_bupt/桌面/file/vulnmap/agent/discovery/store.py": "c63fc3b14645bc58fbbbda486a9f398a6ea0afc68d0a2de98b60fb5a7100c828",
+    "/home/root_bupt/桌面/file/vulnmap/agent/discovery/targetspec.py": "21b257a813d69187d45221da699b02dad466c60b7c79efb260533a910f904763",
+    "/home/root_bupt/桌面/file/vulnmap/discovery/llm-cjson-live/campaign.json": "a2c71d306cdf7e2af9817aab86c37da1f664a8de4a3c77572377551a8dca04d9",
+    "/home/root_bupt/桌面/file/vulnmap/discovery/png-fixture/campaign.json": "b7334359cdf2b64c3972716bf5a99d455f31ca4c5c2cf8796e2a14040020e9e1",
+    "/home/root_bupt/桌面/file/vulnmap/discovery/real-cjson-parse/campaign.json": "a14663c1d6f6f68c94f1e8c288494ef68418a012677e6cf13f9af8b6c0d975f4",
+    "/home/root_bupt/桌面/file/vulnmap/discovery/tiff-fixture/campaign.json": "b6831a4cd884f099a25cd65037f9cf8df7cb9d65532dee9dea6c46c991e5c2d2",
+    "/home/root_bupt/桌面/file/vulnmap/discovery/real-libpng-chunks-r2/campaign.json": "e85b5c6a7ad5f9e6a18bd2e686d25c88f31f30a5f002eafd5065e7831f73ac18",
+    "/home/root_bupt/桌面/file/vulnmap/discovery/real-libpng-row/campaign.json": "766990795922ec62058925acbddd19c30d5e55813c5be4a1db4cea32495a303c",
+    "/home/root_bupt/桌面/file/vulnmap/discovery/fixture/campaign.json": "3d24efec960241705085cac5b43eb8d66f4fd5c1602f134922cbd9d44552c85d",
+    "/home/root_bupt/桌面/file/vulnmap/discovery/real-cjson-yaml/campaign.json": "bfe331f11516f94d978d676bc9a01700e5bb6a4611ac04957cd73a0c93c9bb6d",
+    "/home/root_bupt/桌面/file/vulnmap/discovery/llm-fixture-live/campaign.json": "a057a435c5df42fe7082a523ad59140605b1e3b776cd8ee3f855aac682e66b88",
+    "/home/root_bupt/桌面/file/vulnmap/discovery/real-libtiff-rgba-r2/campaign.json": "fe2efffc9e30fe1c67ceff6e606fd340c5f69a64b0d6d7b65cc6c07ee83136dd",
+    "/home/root_bupt/桌面/file/vulnmap/discovery/real-cjson/campaign.json": "d2b39dbb05b59802bee39eb54a2ee48f86a23964cc4a690fbc5dda444bd1371d",
+    "/home/root_bupt/桌面/file/vulnmap/discovery/real-libtiff-strip/campaign.json": "3201c92c269b914702eafb37720b469c09811ac37716b0a4bd2a2eea62e7ff57",
+    "/home/root_bupt/桌面/file/vulnmap/discovery/real-libtiff/campaign.json": "336431c2132cd77bae4feff3e7da6e59ff6f4cf196bb746c2f505cc918e04fae"
+  },
+  "changes": [
+    "旧 Benchmark 复现架构替换为 Discovery",
+    "假设驱动规则种子已接通",
+    "隔离与证据门禁已实现",
+    "默认规则复核，可选单次 LLM 复核"
+  ],
+  "execution": "本次仅核对代码和归档数据，未重跑发现实验"
+}

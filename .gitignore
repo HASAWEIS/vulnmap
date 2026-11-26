@@ -1,0 +1,38 @@
+# Large local benchmark/workspace artifacts (not source)
+workspace/
+experiments/
+discovery/
+
+# Runtime state / databases / logs
+.platform/
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+*.log
+runs/
+logs/
+
+# Secrets / local env
+.env
+.env.*
+*.pem
+*.key
+id_rsa*
+id_ed25519*
+.git-credentials
+
+# Python / test caches
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+node_modules/
+
+# OS/editor
+.DS_Store
+.idea/
+.vscode/

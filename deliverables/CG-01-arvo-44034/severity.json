@@ -1,0 +1,33 @@
+{
+  "severity": "high",
+  "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:U/C:H/I:H/A:H",
+  "rationale": "PDF BaseFont 名称长度完全由输入控制，stack-buffer-overflow 写越界可覆盖返回地址",
+  "reviewed_by": "manual-review",
+  "reviewed_at": "2026-11-10",
+  "dimensions": {
+    "attack_vector": {
+      "value": "network",
+      "evidence": "PDF 通过 gstoraster_fuzzer 处理，属不可信输入解析"
+    },
+    "privileges_required": {
+      "value": "none",
+      "evidence": "无需认证，任何 PDF 处理路径均可触发"
+    },
+    "user_interaction": {
+      "value": "required",
+      "evidence": "需目标程序打开恶意 PDF"
+    },
+    "observed_impact": {
+      "value": "memory_corruption_confirmed",
+      "evidence": "ASAN: stack-buffer-overflow WRITE of size 5575 @ pdf_font.c:332"
+    },
+    "reachability_evidence": {
+      "value": "confirmed",
+      "evidence": "propagation.json 记录 BaseFont -> memcpy 完整链路"
+    },
+    "deployment_conditions": {
+      "value": "default_build",
+      "evidence": "官方 vul 镜像默认构建即复现"
+    }
+  }
+}

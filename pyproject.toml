@@ -1,0 +1,20 @@
+[project]
+name = "vulnmap"
+version = "0.1.0"
+description = "Autonomous vulnerability-mining agent for CyberGym / ExploitGym course deliverable"
+requires-python = ">=3.11"
+# 运行时零第三方依赖：仅用标准库（sqlite3/hashlib/subprocess/json…），
+# 这样在干净环境和评测容器里都能直接跑起来。
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest==9.1.1"]
+
+[project.scripts]
+vulnmap = "bin.vulnmap:main"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.setuptools]
+packages = ["agent"]

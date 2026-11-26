@@ -1,0 +1,10 @@
+{
+  "_instruction": "待提交回执模板。须实际提交并收到接受结果后填写。Agent 不得代填 accepted。",
+  "task_id": "arvo:10096",
+  "exit_code": 1,
+  "accepted": null,
+  "poc_sha256": "a9fce3b59118054fb6477861c5f025f941243b6d39f7faa131dfdc8282861ddf",
+  "submitted_at": null,
+  "submitted_to": null,
+  "response_note": null
+}

@@ -1,0 +1,16 @@
+# P1 真实目标：cJSON 1.7.10 Parse/Print 路径（跳过 cJSON_Minify）
+# harness 在 discovery/real-cjson-parse/harness.c
+name: cJSON-1.7.10-parse
+root: /tmp/cJSON
+format: json
+sources:
+  - cJSON.c
+  - /home/root_bupt/桌面/file/vulnmap/discovery/real-cjson-parse/harness.c
+includes:
+  - .
+build:
+  mode: main
+fuzz:
+  seconds: 120
+  workers: 4
+  timeout: 2.0

@@ -1,0 +1,659 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>任务详情 · vulnmap</title>
+<link rel="stylesheet" href="style.css?v=202611171640">
+<style>
+/* 研究轮次面板（V3 P4a）：本页专用的紧凑时间线，不引新依赖、不改共用 style.css */
+.rf-round{border:1px solid #e3e6ee;border-radius:10px;padding:12px 14px;margin:0 0 12px}
+.rf-round-hd{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:8px}
+.rf-round-no{font-weight:600}
+.rf-phases{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
+.rf-chip{display:inline-block;padding:2px 8px;border-radius:999px;font-size:12px;
+  border:1px solid transparent;background:#eef1f7;color:#42506b}
+.rf-chip.ok{background:#e7f7ee;color:#1d7a45;border-color:#bfe6cf}
+.rf-chip.warn{background:#fff5e5;color:#8a5a00;border-color:#f0dcb4}
+.rf-chip.bad{background:#fdeaea;color:#9b1c1c;border-color:#f3c4c4}
+.rf-chip.dim{background:#eef1f7;color:#5b667c}
+.rf-meta{display:flex;gap:16px;flex-wrap:wrap;margin-bottom:10px;color:#5b667c;font-size:13px}
+.rf-ref{background:#eef1f7;border-radius:4px;padding:0 4px}
+.rf-stop{margin-top:8px;font-size:13px;color:#5b667c}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar" id="sidebar"></aside>
+  <div class="main">
+    <header class="tophead" id="tophead"></header>
+    <div class="content" id="content"><div class="loading">正在读取任务状态…</div></div>
+  </div>
+</div>
+<script src="app.js?v=202611171640"></script>
+<script>
+const Q = new URLSearchParams(location.search);
+const TID = Q.get('task_id') || '';
+const WANT_JOB = Q.get('job_id') || '';
+renderShell('platform-tasks', {
+  title: '任务详情',
+  sub: '状态机现状 + 预算 + 时间线（事件重放）；执行由「执行作业（Job）」面板显式触发并实时跟踪。'
+});
+
+// 页面状态（只放展示用数据；真正的状态仍只由 EventBus 写）
+let DETAIL = null;            // 最近一次 /tasks/{id} 响应
+let JOBS = [];                // 最近若干条作业
+let CUR_JOB = null;           // 面板正在展示的作业
+let LAST_SEQ = 0;             // SSE after= 的游标
+let LIVE = [];                // 最近收到的实时事件（最多 20 条）
+let NOTE = {kind: '', text: ''};
+let ES = null;
+let STREAM_NOTE = '未连接';
+let STREAM_ERRORS = 0;
+let STREAM_CLOSED = false;
+
+function field(k, v, cls) {
+  return `<div class="field"><div class="k">${esc(k)}</div><div class="v ${cls || ''}">${esc(v)}</div></div>`;
+}
+function kv(k, v) { return `<div class="kv-row"><span class="k">${esc(k)}</span><span class="v">${esc(v)}</span></div>`; }
+function short(s, n = 16) { return s ? String(s).slice(0, n) : '—'; }
+
+function timeline(items) {
+  if (!items || !items.length) {
+    return '<div class="pf-empty">还没有状态迁移事件（提交后应有 RECEIVED → …）。</div>';
+  }
+  return `<div class="tl">${items.map(t => `<div class="tl-item">
+      <span class="nm">#${esc(t.seq)} ${esc(t.to)}</span>
+      <span class="ds">${esc(t.from)} → <b>${esc(t.to)}</b>${t.reason ? ' · ' + esc(t.reason) : ''}</span>
+    </div>`).join('')}</div>`;
+}
+
+function candidatesTable(items) {
+  if (!items.length) return '<div class="pf-empty">没有候选（单端执行只在 RUNNING 之后产 Candidate）。</div>';
+  return `<div class="tw"><table class="overview-table"><thead><tr>
+      <th>候选</th><th>crash_type</th><th>state</th><th>stack_hash</th><th>证据 sha</th><th>时间</th>
+    </tr></thead><tbody>${items.map(c => `<tr>
+      <td class="mono">${esc(c.id)}</td><td class="mono">${esc(c.crash_type || '—')}</td>
+      <td>${badge(c.state || 'new', c.state === 'verified' ? 'b-ok' : 'b-dim')}</td>
+      <td class="mono">${esc(short(c.stack_hash))}</td>
+      <td class="mono">${esc(short(c.evidence_sha256, 12))}</td>
+      <td class="mono">${esc(c.created_at || '—')}</td></tr>`).join('')}</tbody></table></div>`;
+}
+
+function verificationsTable(items) {
+  if (!items.length) return '<div class="pf-empty">没有验证记录（验证只按 benchmark 判据产生）。</div>';
+  return `<div class="tw"><table class="overview-table"><thead><tr>
+      <th>验证</th><th>判据</th><th>结论</th><th>blockers</th><th>时间</th>
+    </tr></thead><tbody>${items.map(v => `<tr>
+      <td class="mono">${esc(v.verification_id)}</td><td class="mono">${esc(v.kind || '—')}</td>
+      <td>${badge(v.verified ? '已验证' : (v.status || '未成立'), v.verified ? 'b-ok' : 'b-warn')}</td>
+      <td class="mono">${esc(((v.detail || {}).blockers || []).join(', ') || '—')}</td>
+      <td class="mono">${esc(v.created_at || '—')}</td></tr>`).join('')}</tbody></table></div>`;
+}
+
+function reviewsTable(items) {
+  if (!items.length) return '<div class="pf-empty">没有复核记录（复核只能降级不能升级）。</div>';
+  return `<div class="tw"><table class="overview-table"><thead><tr>
+      <th>复核</th><th>verdict</th><th>验证</th><th>说明</th><th>时间</th>
+    </tr></thead><tbody>${items.map(r => `<tr>
+      <td class="mono">${esc(r.review_id)}</td>
+      <td>${badge(r.verdict || '—', r.verdict === 'accept' ? 'b-ok' : (r.verdict === 'reject' ? 'b-bad' : 'b-warn'))}</td>
+      <td class="mono">${esc(r.verification_id || '—')}</td>
+      <td>${esc(r.reason || '—')}</td><td class="mono">${esc(r.created_at || '—')}</td></tr>`).join('')}</tbody></table></div>`;
+}
+
+/* ══════════════════════ 研究轮次（只读消费） ══════════════════════ */
+/* 数据全部来自 GET /api/platform/tasks/{id}/research：页面不读 research.json、
+   不碰数据库、也不写状态；404=还没跑过研究循环，409=产物存在但不可用。 */
+let RESEARCH = {status: 'idle', doc: null, detail: ''};
+
+function rfClass(status) {
+  const v = String(status || '').toLowerCase();
+  if (['ok', 'applied', 'passed', 'noop', 'adopted'].includes(v)) return 'ok';
+  if (['failed', 'error', 'rejected', 'budget'].includes(v)) return 'bad';
+  if (['skipped', 'blocked', 'repeated', 'unknown', 'deferred', 'cancelled'].includes(v)) return 'warn';
+  return 'dim';
+}
+function rfChip(label, status) {
+  return `<span class="rf-chip ${rfClass(status)}">${esc(label)}</span>`;
+}
+function rfRefs(refs) {
+  if (!refs || !refs.length) return '<span class="mono">—</span>';
+  const head = refs.slice(0, 3).map(r => `<span class="mono rf-ref" title="${esc(r)}">${esc(String(r).slice(0, 10))}</span>`);
+  const more = refs.length > 3 ? ` <span class="mono">+${refs.length - 3}</span>` : '';
+  return head.join(' ') + more;
+}
+function rfActions(items) {
+  if (!items || !items.length) return '<div class="pf-empty">本轮没有动作。</div>';
+  return `<div class="tw"><table class="overview-table"><thead><tr>
+      <th>动作</th><th>工具</th><th>结果</th><th>候选</th><th>证据引用</th><th>错误</th>
+    </tr></thead><tbody>${items.map(a => {
+      const err = (a.error && (a.error.code || a.error.message)) || '';
+      return `<tr>
+      <td class="mono">${esc(a.action_id || '—')}</td>
+      <td class="mono">${esc(a.tool || '—')}</td>
+      <td>${rfChip(a.status || '—', a.status)}</td>
+      <td class="mono">${esc(a.candidates == null ? '—' : a.candidates)}</td>
+      <td>${rfRefs(a.evidence_refs)}</td>
+      <td class="mono">${esc(err || '—')}</td></tr>`;
+    }).join('')}</tbody></table></div>`;
+}
+function rfCompare(c) {
+  if (!c || !c.status) return '';
+  const bits = [c.status, c.reason || '', c.comparable ? '可比较=' + c.comparable : '',
+                (c.delta == null ? '' : 'Δ' + c.delta), c.verdict ? '裁决=' + c.verdict : '']
+    .filter(Boolean).join(' · ');
+  return `<div class="rf-stop">比较：${rfChip(c.status, c.status)} <span class="mono">${esc(bits)}</span></div>`;
+}
+function rfRound(r) {
+  const res = r.results || {};
+  const flags = [
+    r.stop_reason ? rfChip('停止：' + r.stop_reason, r.stop_reason === 'candidate_ready' ? 'ok' : 'warn') : '',
+    res.adopted ? rfChip('工程采纳', 'adopted') : '',
+    res.reverted ? rfChip('已回退 ' + res.reverted, 'warn') : '',
+  ].filter(Boolean).join(' ');
+  return `<div class="rf-round">
+    <div class="rf-round-hd">
+      <span class="rf-round-no">第 ${esc(r.round)} 轮</span>
+      ${r.diagnosis && r.diagnosis.code ? rfChip('诊断：' + r.diagnosis.code, 'ok') : ''}
+      ${flags}
+      <span class="mono">facts ${esc(short(r.facts_hash, 12))}</span>
+    </div>
+    <div class="rf-phases">${(r.phases || []).map(p => rfChip(p.phase + ':' + p.status, p.status)).join('') || '<span class="mono">—</span>'}</div>
+    ${rfActions(r.actions)}
+    ${rfCompare(res.compare)}
+    <div class="rf-stop">结果：<span class="mono">${esc(JSON.stringify(res.action_status || {}))}</span>
+      · 构建 <span class="mono">${esc((res.build || {}).status || '—')}</span>
+      · 冒烟 <span class="mono">${esc((res.smoke || {}).status || '—')}</span>
+      · 修订 <span class="mono">${esc(r.revision || '—')}</span>
+      ${res.stop_reason ? ' · 停止原因 <b>' + esc(res.stop_reason) + '</b>' : ''}</div>
+  </div>`;
+}
+function researchHTML() {
+  if (RESEARCH.status === 'loading') return '<div class="pf-empty">正在读取研究轮次…</div>';
+  if (RESEARCH.status === 'missing') {
+    return `<div class="pf-empty">还没有研究轮次：任务跑过 <span class="mono">run --research</span> 之后，这里会出现轮次时间线（阶段/动作/比较/停止原因）。</div>`;
+  }
+  if (RESEARCH.status === 'conflict') {
+    return `<div class="pf-empty">研究产物存在但不可用（409）：${esc(RESEARCH.detail)}</div>`;
+  }
+  if (RESEARCH.status === 'error') {
+    return `<div class="pf-empty">读取研究轮次失败（${esc(RESEARCH.detail)}）；本面板只读，不影响任务状态。</div>`;
+  }
+  const d = RESEARCH.doc;
+  if (!d) return '<div class="pf-empty">正在读取研究轮次…</div>';
+  const head = `<div class="rf-meta">
+      <span>平台状态 ${stateBadge(d.state)}</span>
+      <span>控制器 <span class="mono">${esc(d.controller_state || '—')}</span></span>
+      <span>停止原因 <b>${esc(d.stop_reason || '—')}</b></span>
+      <span>轮次 <b>${esc(d.rounds_count)}</b>/${esc(d.max_rounds || '—')}</span>
+      <span>执行 <span class="mono">${esc(d.executions)}</span>（应用 ${esc(d.executions_applied)} / 失败 ${esc(d.executions_failed)}）</span>
+      <span>候选 <span class="mono">${esc(d.candidates)}</span></span>
+      <span>可交独立验证 <span class="mono">${d.verification_allowed ? 'yes' : 'no'}</span></span>
+    </div>
+    <div class="rf-stop">报告 <span class="mono">${esc(d.report.path)}</span> · sha <span class="mono">${esc(short(d.report.sha256, 16))}</span>
+      · 生成于 <span class="mono">${esc(d.report.generated_at || '—')}</span></div>
+    <div class="rf-phases" style="margin-top:10px">${(d.phases || []).map(p => rfChip(p.phase + ' ×' + p.count, (p.statuses && Object.keys(p.statuses).length === 1) ? Object.keys(p.statuses)[0] : 'dim')).join('')}</div>`;
+  const rounds = (d.rounds || []).map(rfRound).join('');
+  return head + (rounds || '<div class="pf-empty">报告里还没有轮次。</div>') +
+    `<div class="rf-stop">${esc(d.note || '')}</div>`;
+}
+function paintResearch() {
+  const body = $('#rf-body');
+  if (body) body.innerHTML = researchHTML();
+  const count = $('#rf-count');
+  if (count) count.textContent = RESEARCH.doc ? RESEARCH.doc.rounds_count : '—';
+  const chip = $('#rf-chip');
+  if (chip) {
+    const d = RESEARCH.doc;
+    chip.textContent = d ? (d.state + ' · ' + (d.stop_reason || '—'))
+      : (RESEARCH.status === 'missing' ? '未开始研究循环'
+        : RESEARCH.status === 'conflict' ? '产物冲突'
+          : RESEARCH.status === 'error' ? '读取失败' : '读取中…');
+    chip.className = 'pf-job-chip' + (d ? ' on' : '');
+  }
+}
+async function loadResearch() {
+  if (!TID) return;
+  RESEARCH = {status: 'loading', doc: null, detail: ''};
+  paintResearch();
+  try {
+    const r = await fetch('/api/platform/tasks/' + encodeURIComponent(TID) + '/research');
+    if (r.status === 404) {
+      RESEARCH = {status: 'missing', doc: null, detail: ''};
+    } else if (r.status === 409) {
+      let detail = '';
+      try { detail = (await r.json()).detail || ''; } catch (e) { detail = 'HTTP 409'; }
+      RESEARCH = {status: 'conflict', doc: null, detail};
+    } else if (!r.ok) {
+      RESEARCH = {status: 'error', doc: null, detail: 'HTTP ' + r.status};
+    } else {
+      RESEARCH = {status: 'ready', doc: await r.json(), detail: ''};
+    }
+  } catch (e) {
+    RESEARCH = {status: 'error', doc: null, detail: e.message || '网络错误'};
+  }
+  paintResearch();
+}
+
+/* ══════════════════════ 执行作业（Job）面板 ══════════════════════ */
+
+function setNote(kind, text) { NOTE.kind = kind || ''; NOTE.text = text || ''; }
+function parseData(ev) { try { return JSON.parse(ev.data || '{}'); } catch (e) { return null; } }
+function authHint(msg) {
+  return /401|403|token|Token|鉴权|未授权/.test(String(msg || ''))
+    ? '（服务端设置了 PLATFORM_API_TOKEN 时，请先在下方保存 token）' : '';
+}
+function sortJobs(list) {
+  return list.slice().sort((a, b) =>
+    String(b.created_at || b.started || '').localeCompare(String(a.created_at || a.started || '')));
+}
+function mergeJobList(base, extra) {
+  const seen = new Set(base.map(j => j.job_id));
+  for (const j of extra) if (j && j.job_id && !seen.has(j.job_id)) { base.push(j); seen.add(j.job_id); }
+  return sortJobs(base);
+}
+function mergeJobs(partials) {
+  for (const s of (partials || [])) {
+    if (!s || !s.job_id) continue;
+    let hit = JOBS.find(j => j.job_id === s.job_id);
+    if (!hit) { hit = {job_id: s.job_id}; JOBS.push(hit); }
+    for (const k of ['status', 'pid', 'started', 'finished', 'exit_code']) {
+      if (s[k] !== undefined) hit[k] = s[k];
+    }
+  }
+  JOBS = sortJobs(JOBS);
+  if (CUR_JOB) CUR_JOB = JOBS.find(j => j.job_id === CUR_JOB.job_id) || CUR_JOB;
+}
+
+function liveHTML() {
+  if (!LIVE.length) {
+    return '<div class="pf-empty">还没有收到实时事件（连上后服务端从 after=seq 起推送）。</div>';
+  }
+  return `<div class="tl pf-job-live">${LIVE.map(ev => `<div class="tl-item">
+      <span class="nm">#${esc(ev.seq ?? '—')}</span>
+      <span class="ds">${esc(ev.event_type || '事件')}${ev.stage ? ' · ' + esc(ev.stage) : ''}${ev.ts ? ' · <span class="mono">' + esc(ev.ts) + '</span>' : ''}</span>
+    </div>`).join('')}</div>`;
+}
+
+function jobLogHTML(j) {
+  const log = j.log || {};
+  const meta = [log.path || '—', log.exists === false ? '文件不存在' : '',
+                log.size != null ? log.size + ' B' : ''].filter(Boolean).join(' · ');
+  return `<div class="pf-job-logwrap">
+      <div class="pf-job-loghd"><span>日志 tail（最后 4KB）</span><span class="mono">${esc(meta)}</span></div>
+      <pre class="pf-job-log">${esc(log.tail || '（日志为空）')}</pre>
+    </div>`;
+}
+
+function tokenHTML() {
+  const saved = platformToken();
+  return `<div class="pf-job-token">
+      <label for="pf-token">API token（仅当服务端设置了 PLATFORM_API_TOKEN 时需要；只存本地 localStorage，键名 platform_token）</label>
+      <div class="pf-row-actions">
+        <input id="pf-token" type="password" autocomplete="off" spellcheck="false"
+               placeholder="${saved ? '已保存（留空 = 清除）' : '本地开放模式，可留空'}">
+        <button class="pf-btn" type="button" onclick="saveToken()">保存 token</button>
+        <span class="pf-hint" id="pf-token-note">${saved ? '已保存：写请求会带 Bearer 头' : '未保存：写请求不带鉴权头'}</span>
+      </div>
+    </div>`;
+}
+
+function jobsHistoryHTML() {
+  if (JOBS.length < 2) return '';
+  return `<div class="pf-job-history">
+      <div class="pf-job-loghd"><span>最近作业</span><span class="mono">${esc(JOBS.length)}</span></div>
+      <div class="pf-row-actions">${JOBS.slice(0, 8).map(j => {
+        const href = `${taskHref('platform-task.html', TID)}&job_id=${encodeURIComponent(j.job_id)}`;
+        const on = CUR_JOB && CUR_JOB.job_id === j.job_id;
+        return `<a class="pf-btn${on ? ' primary' : ''}" href="${href}">${esc(j.job_id)} · ${esc(j.status || '—')}</a>`;
+      }).join('')}</div>
+    </div>`;
+}
+
+function renderJobPanel() {
+  const el = $('#job-panel');
+  if (!el) return;
+  const state = (DETAIL && DETAIL.state) || '';
+  const j = CUR_JOB;
+  const canRun = state === 'PLANNED';
+  const canCancel = !!(j && jobLive(j.status));
+  // 同一任务有活作业时再 run 会被后端 409，这里先禁掉按钮
+  const liveJob = JOBS.find(x => jobLive(x.status)) || null;
+  const chip = ES && !STREAM_CLOSED ? ' on' : (STREAM_CLOSED ? ' off' : '');
+  const runBtn = `<button class="pf-btn primary" type="button" id="job-run" onclick="runTask()"${liveJob ? ' disabled' : ''}>触发执行</button>`;
+  const cancelBtn = '<button class="pf-btn" type="button" id="job-cancel" onclick="cancelJob()">取消作业</button>';
+
+  el.innerHTML = `<div class="panel-hd"><div><h2>执行作业（Job）<span class="count-label">${esc(JOBS.length)}</span></h2>
+      <p>触发执行只负责起子进程并登记 Job；作业状态与任务状态都以事件流为准。</p></div>
+      <div class="pf-row-actions">
+        <span class="pf-job-chip${chip}" id="job-stream-chip">${esc(STREAM_NOTE)}</span>
+        <button class="pf-btn" type="button" onclick="reconnect()">重连</button>
+      </div></div>
+    <div class="pf-status">作业 <span class="mono">${esc(j ? j.job_id : '—')}</span>
+      · 作业状态 <span id="job-status-badge">${j ? jobBadge(j.status || 'PENDING') : badge('无作业', 'b-dim')}</span>
+      · 推送 <span class="mono" id="job-stream-note">${esc(STREAM_NOTE)}</span>
+      · 事件游标 <span class="mono" id="job-lastseq">${esc(LAST_SEQ)}</span></div>
+    ${NOTE.text ? `<div class="pf-note"><div class="note ${esc(NOTE.kind)}" role="status">${esc(NOTE.text)}</div></div>` : ''}
+    ${j ? `<div class="panel-bd">
+      <div class="fields pf-job-fields">
+        ${field('job_id', j.job_id || '—')}
+        ${field('pid', j.pid == null ? '—' : j.pid)}
+        ${field('started', j.started || '—')}
+        ${field('finished', j.finished || '—')}
+        ${field('exit_code', j.exit_code == null ? '—' : j.exit_code)}
+        ${field('argv', (j.argv || []).join(' ') || '—')}
+      </div>
+      <div class="pf-actions">
+        ${canRun ? runBtn : ''}
+        ${canCancel ? cancelBtn : ''}
+        <span class="pf-hint">${canRun ? (liveJob ? '已有运行中的作业 ' + liveJob.job_id + '：先取消或等它结束' : '任务已 PLANNED，可以触发一次执行。') : '「触发执行」只在任务 PLANNED 时可用' + (state ? '（当前 ' + state + '）' : '')}</span>
+      </div>
+      ${j.note ? `<div class="pf-hint pf-note">${esc(j.note)}</div>` : ''}
+      ${jobLogHTML(j)}
+    </div>` : `<div class="pf-empty">还没有作业记录。${canRun ? '任务已 PLANNED，可以触发执行。' : '任务到 PLANNED 后「触发执行」会出现。'}</div>
+    ${canRun ? `<div class="pf-actions">${runBtn}</div>` : ''}`}
+    ${jobsHistoryHTML()}
+    <div class="panel-bd pf-job-livewrap">
+      <div class="pf-job-loghd"><span>最近事件（实时）</span><span class="mono">EventSource · after=${esc(LAST_SEQ)}</span></div>
+      <div id="job-live">${liveHTML()}</div>
+    </div>
+    <div class="pf-note">${tokenHTML()}</div>`;
+}
+
+function paintStream() {
+  const note = $('#job-stream-note');
+  if (note) note.textContent = STREAM_NOTE;
+  const chip = $('#job-stream-chip');
+  if (chip) {
+    chip.textContent = STREAM_NOTE;
+    chip.className = 'pf-job-chip' + (ES && !STREAM_CLOSED ? ' on' : (STREAM_CLOSED ? ' off' : ''));
+  }
+  const cur = $('#job-lastseq');
+  if (cur) cur.textContent = LAST_SEQ;
+}
+function paintLive() { const el = $('#job-live'); if (el) el.innerHTML = liveHTML(); paintStream(); }
+
+// 'state' 帧：任务状态 + 作业状态 + 事件计数
+function applyState(d) {
+  if (!d) return;
+  if (d.state) {
+    const b = $('#task-state-badge'); if (b) b.innerHTML = stateBadge(d.state);
+    const k = $('#kpi-state'); if (k) k.textContent = stateLabel(d.state);
+    if (DETAIL) DETAIL.state = d.state;
+  }
+  if (d.events != null) { const c = $('#task-events'); if (c) c.textContent = d.events; }
+  mergeJobs(d.jobs || []);
+  renderJobPanel();
+}
+
+function closeStream() {
+  if (ES) { try { ES.close(); } catch (e) {} ES = null; }
+  STREAM_CLOSED = true;
+}
+
+function openStream() {
+  closeStream();
+  if (!TID) return;
+  if (typeof EventSource === 'undefined') { STREAM_NOTE = '浏览器不支持推送'; renderJobPanel(); return; }
+  STREAM_CLOSED = false;
+  STREAM_ERRORS = 0;
+  let es;
+  try {
+    es = new EventSource('/api/platform/tasks/' + encodeURIComponent(TID) + '/stream?after=' + LAST_SEQ);
+  } catch (e) {
+    STREAM_NOTE = '推送不可用：' + e.message;
+    renderJobPanel();
+    return;
+  }
+  ES = es;
+  STREAM_NOTE = '连接中…';
+  paintStream();
+  es.addEventListener('hello', ev => {
+    STREAM_NOTE = '连接在线';
+    const d = parseData(ev);
+    if (d) applyState({state: d.state, events: d.events});
+    paintStream();
+  });
+  es.addEventListener('ping', () => { STREAM_NOTE = '连接在线'; STREAM_ERRORS = 0; paintStream(); });
+  es.addEventListener('task_event', ev => {
+    const d = parseData(ev);
+    if (!d) return;
+    LAST_SEQ = Math.max(LAST_SEQ, Number(d.seq) || 0);
+    LIVE.unshift(d);
+    if (LIVE.length > 20) LIVE.length = 20;
+    paintLive();
+  });
+  es.addEventListener('state', ev => { const d = parseData(ev); if (d) applyState(d); });
+  es.addEventListener('end', ev => {
+    const d = parseData(ev) || {};
+    const reason = d.reason || 'unknown';
+    closeStream();
+    STREAM_NOTE = '推送结束：' + reason;
+    renderJobPanel();
+    paintStream();
+    if (reason === 'terminal') refreshDetail();
+  });
+  es.onerror = () => {
+    if (STREAM_CLOSED) return;
+    STREAM_ERRORS += 1;
+    STREAM_NOTE = STREAM_ERRORS > 2 ? '推送暂不可用（可点重连）' : '连接中断，正在重试…';
+    if (STREAM_ERRORS > 2) closeStream();
+    renderJobPanel();
+    paintStream();
+  };
+}
+function reconnect() { closeStream(); STREAM_CLOSED = false; openStream(); }
+
+/* ══════════════════════ 显式写操作（run / cancel） ══════════════════════ */
+
+async function runTask() {
+  if (!TID) return;
+  setNote('info', '正在触发执行…');
+  renderJobPanel();
+  try {
+    const out = await writeJSON('/api/platform/tasks/' + encodeURIComponent(TID) + '/run', {});
+    if (out.job && out.job.job_id) { JOBS = mergeJobList([out.job], JOBS); CUR_JOB = out.job; }
+    setNote('info', '已受理执行：pid ' + (out.pid == null ? '—' : out.pid)
+      + ' · 状态 ' + (out.state || '—') + ' · 日志 ' + (out.log || '—') + '（进度以事件流为准）');
+    await refreshDetail();
+  } catch (e) {
+    setNote('bad', '触发执行失败：' + e.message + authHint(e.message));
+    renderJobPanel();
+  }
+}
+
+async function cancelJob() {
+  if (!CUR_JOB || !CUR_JOB.job_id) return;
+  setNote('info', '正在取消作业 ' + CUR_JOB.job_id + '…');
+  renderJobPanel();
+  try {
+    const out = await writeJSON('/api/platform/jobs/' + encodeURIComponent(CUR_JOB.job_id) + '/cancel', {});
+    if (out.job && out.job.job_id) { JOBS = mergeJobList([out.job], JOBS); CUR_JOB = out.job; }
+    setNote('info', '取消已提交：' + (out.state || (out.job && out.job.status) || 'CANCELLED')
+      + (out.signal ? ' · ' + out.signal : '') + '（终态以事件流为准）');
+    await refreshDetail();
+  } catch (e) {
+    setNote('bad', '取消失败：' + e.message + authHint(e.message));
+    renderJobPanel();
+  }
+}
+
+function saveToken() {
+  const input = $('#pf-token');
+  const value = input ? String(input.value || '').trim() : '';
+  try {
+    if (value) localStorage.setItem(PLATFORM_TOKEN_KEY, value);
+    else localStorage.removeItem(PLATFORM_TOKEN_KEY);
+    setNote('info', value ? '已保存 token：写请求会带 Bearer 头' : '已清除 token：写请求不带鉴权头');
+  } catch (e) {
+    setNote('bad', '保存 token 失败：' + e.message);
+  }
+  renderJobPanel();
+}
+
+function lastSeqOf(d) {
+  let seq = 0;
+  for (const t of ((d && d.timeline) || [])) seq = Math.max(seq, Number(t.seq) || 0);
+  for (const ev of (((d && d.events) || {}).tail || [])) seq = Math.max(seq, Number(ev.seq) || 0);
+  return seq;
+}
+function pickJob() {
+  if (!JOBS.length) return null;
+  if (WANT_JOB) { const hit = JOBS.find(j => j.job_id === WANT_JOB); if (hit) return hit; }
+  return JOBS[0];
+}
+async function ensureWantedJob() {
+  if (!WANT_JOB || JOBS.some(j => j.job_id === WANT_JOB)) return;
+  try {
+    const d = await getOr404('/api/platform/jobs/' + encodeURIComponent(WANT_JOB));
+    if (d && d.job) JOBS = mergeJobList([d.job], JOBS);
+  } catch (e) { /* 作业接口不可用时退回最新一条，不阻塞详情页 */ }
+}
+
+async function refreshDetail() {
+  try {
+    const d = await api('/api/platform/tasks/' + encodeURIComponent(TID));
+    const keep = CUR_JOB && CUR_JOB.job_id ? CUR_JOB.job_id : '';
+    DETAIL = d;
+    JOBS = mergeJobList(sortJobs((d.jobs || []).slice()), JOBS);
+    CUR_JOB = (keep && JOBS.find(j => j.job_id === keep)) || pickJob();
+    page(d);
+  } catch (e) {
+    setNote('bad', '刷新失败：' + e.message);
+    renderJobPanel();
+  }
+}
+
+/* ══════════════════════ 页面 ══════════════════════ */
+
+function page(d) {
+  const t = d.task, s = d.summary || {}, b = d.budget || {};
+  const c = (s.candidates || 0), v = (s.verifications || 0), r = (s.reviews || 0), e = (s.evidence || 0);
+  const pack = d.casepack;
+  const plan = d.plan, prog = d.program_index;
+  $('#content').innerHTML = `
+    <section class="panel cases-panel" style="margin-bottom:20px">
+      <div class="panel-hd"><div><h2>${esc(t.task_id)} <span id="task-state-badge">${stateBadge(d.state)}</span></h2>
+        <p>${esc(t.benchmark)} · ${esc(t.mode)} · <span class="mono">${esc(t.target)}</span></p></div>
+        <a class="pf-btn" href="platform-tasks.html">任务列表 ${icon('arrow')}</a></div>
+      ${taskNav(TID, 'platform-task.html')}
+      <div class="pf-status">创建 <span class="mono">${esc(t.created_at)}</span>
+        · 更新 <span class="mono">${esc(t.updated_at)}</span>
+        · 终止原因 <span class="mono">${esc(t.terminal_reason || '—')}</span>
+        · 事件 <span class="mono" id="task-events">${esc(d.events.count)}</span></div>
+      <div class="pf-kpis">
+        <div class="pf-kpi"><span>状态</span><b id="kpi-state">${esc(stateLabel(d.state))}</b><span>${esc(d.state)}</span></div>
+        <div class="pf-kpi"><span>证据</span><b>${esc(e)}</b><span>evidence 条目</span></div>
+        <div class="pf-kpi"><span>候选</span><b>${esc(c)}</b><span>Candidate</span></div>
+        <div class="pf-kpi"><span>验证</span><b>${esc(v)}</b><span>Verification</span></div>
+        <div class="pf-kpi"><span>复核</span><b>${esc(r)}</b><span>Review</span></div>
+        <div class="pf-kpi"><span>CasePack</span><b>${pack ? esc(pack.report_id) : '—'}</b><span>${pack ? '已出包' : '未出包'}</span></div>
+      </div>
+    </section>
+
+    <section class="panel cases-panel pf-job" id="job-panel" style="margin-bottom:20px"></section>
+
+    <section class="panel cases-panel" id="research-panel" style="margin-bottom:20px">
+      <div class="panel-hd"><div><h2>研究轮次 <span class="count-label" id="rf-count">—</span></h2>
+        <p>只读消费 <span class="mono">/api/platform/tasks/{id}/research</span>：阶段 / 动作 / 比较 / 停止原因来自
+          <span class="mono">research.json</span>，页面不读库、不写状态。</p></div>
+        <div class="pf-row-actions"><span class="pf-job-chip" id="rf-chip">读取中…</span></div></div>
+      <div class="panel-bd" id="rf-body"><div class="pf-empty">正在读取研究轮次…</div></div>
+    </section>
+
+    <div class="pf-grid">
+      <section class="panel">
+        <div class="panel-hd"><div><h2>预算与运行上下文</h2><p>TaskSpec 预算；执行器只在这里给的额度内跑</p></div></div>
+        <div class="panel-bd">
+          <div class="fields">
+            ${field('预算 · 秒', b.max_seconds ?? '—')}
+            ${field('预算 · 执行次数', b.max_execs ?? '—')}
+            ${field('预算 · tokens', b.max_tokens ?? '—')}
+            ${field('预算 · 轮次', b.max_turns ?? '—')}
+            ${field('EventBus 事件', d.replay.events)}
+            ${field('重放状态', d.replay.state, d.replay.state === d.state ? 'ok' : 'warn')}
+          </div>
+          <div style="margin-top:18px">
+            ${kv('Plan', plan ? `${plan.kind} · ${plan.budget ? JSON.stringify(plan.budget) : ''}` : '未规划')}
+            ${kv('ProgramIndex', prog ? `${prog.benchmark} · sources ${prog.source_count ?? '—'} · sha ${short(prog.sha256, 12)}` : '未做程序理解')}
+            ${kv('假说集', `${(d.hypotheses || []).length} 条（硬上限 8）`)}
+            ${kv('CasePack 路径', pack ? pack.path : '—')}
+            ${kv('CasePack 哈希', pack ? pack.content_sha256 : '—')}
+          </div>
+          <div class="pf-actions" style="padding:16px 0 0">
+            <a class="pf-btn" href="${taskHref('platform-events.html', TID)}">事件流</a>
+            <a class="pf-btn" href="${taskHref('platform-evidence.html', TID)}">证据浏览器</a>
+            <a class="pf-btn" href="${taskHref('platform-casepack.html', TID)}">CasePack</a>
+          </div>
+        </div>
+      </section>
+      <section class="panel">
+        <div class="panel-hd"><div><h2>时间线</h2><p>由事件流重放得到的状态迁移，不另存一份历史</p></div></div>
+        ${timeline(d.timeline)}
+      </section>
+    </div>
+
+    <section class="panel cases-panel" style="margin-bottom:20px">
+      <div class="panel-hd"><div><h2>候选 <span class="count-label">${(d.candidates || []).length}</span></h2>
+        <p>单端执行只产候选；confirmed 只能来自验证 + 复核</p></div></div>
+      ${candidatesTable(d.candidates || [])}
+    </section>
+
+    <div class="pf-grid">
+      <section class="panel">
+        <div class="panel-hd"><div><h2>独立验证 <span class="count-label">${(d.verifications || []).length}</span></h2>
+          <p>判据按 benchmark 选择（vul/fix · flag · 行为差分）</p></div></div>
+        ${verificationsTable(d.verifications || [])}
+      </section>
+      <section class="panel">
+        <div class="panel-hd"><div><h2>复核 <span class="count-label">${(d.reviews || []).length}</span></h2>
+          <p>复核只读检查，只能降级不能升级</p></div></div>
+        ${reviewsTable(d.reviews || [])}
+      </section>
+    </div>
+
+    <footer class="workspace-footer"><span><i></i>只读模式 · 数据来自 platform.db 与事件流</span>
+      <span>状态由运行时写；页面只发起显式的执行/取消请求</span></footer>`;
+  renderJobPanel();
+  loadResearch();
+}
+
+async function load() {
+  if (!TID) {
+    try {
+      const d = await api('/api/platform/tasks?limit=200');
+      $('#content').innerHTML = `<section class="panel cases-panel"><div class="panel-hd"><div><h2>选择一个任务</h2>
+        <p>任务详情按 task_id 读取；从下面的列表进入，或回到「V2 任务」提交新任务。</p></div>
+        <a class="pf-btn" href="platform-tasks.html">提交任务 ${icon('arrow')}</a></div>
+        ${taskPicker(d.items || [], '还没有任务，先去「V2 任务」页提交一个。')}</section>`;
+    } catch (e) { fail($('#content'), e); }
+    return;
+  }
+  try {
+    const d = await api('/api/platform/tasks/' + encodeURIComponent(TID));
+    DETAIL = d;
+    JOBS = sortJobs((d.jobs || []).slice());
+    LAST_SEQ = lastSeqOf(d);
+    await ensureWantedJob();
+    CUR_JOB = pickJob();
+    page(d);
+    openStream();
+  } catch (e) {
+    $('#content').innerHTML = `<div class="error" role="alert"><b>任务不存在或不可读</b>
+      <p>${esc(e.message)}（task_id=${esc(TID)}）</p>
+      <a class="pf-btn" href="platform-tasks.html">返回任务列表</a></div>`;
+  }
+}
+
+window.runTask = runTask;
+window.cancelJob = cancelJob;
+window.saveToken = saveToken;
+window.reconnect = reconnect;
+window.refreshDetail = refreshDetail;
+window.loadResearch = loadResearch;
+window.addEventListener('beforeunload', closeStream);
+load();
+</script>
+</body>
+</html>

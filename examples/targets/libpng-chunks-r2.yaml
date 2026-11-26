@@ -1,0 +1,22 @@
+# 二轮真实目标：libpng 1.6.37 逐行 + 特殊 chunk（sBIT/bKGD/tRNS palette）+ 背景合成
+# harness 在 discovery/real-libpng-chunks-r2/harness.c：先取 sBIT/bKGD/tRNS，再走
+# expand/strip_16/palette_to_rgb/tRNS_to_alpha/gray_to_rgb/interlace + png_set_background，
+# 最后 png_read_row 逐行读；行缓冲按 png_get_rowbytes 精确分配。
+name: libpng-1.6.37-chunks-r2
+root: /tmp/libpng-1.6.37
+format: png
+sources:
+  - /home/root_bupt/桌面/file/vulnmap/discovery/real-libpng-chunks-r2/harness.c
+includes:
+  - .
+build:
+  mode: main
+  extra_objs:
+    - .libs/libpng16.a
+  libs:
+    - -lz
+    - -lm
+fuzz:
+  seconds: 180
+  workers: 4
+  timeout: 2.0

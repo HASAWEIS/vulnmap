@@ -1,0 +1,39 @@
+{
+  "_status": "DRAFT_PENDING_HUMAN_REVIEW",
+  "_warning": "Agent 起草的论证草案，**不是**人工评审结论。评审人确认后另存为 severity.json 并填 reviewed_by/reviewed_at；在此之前门禁不采信本文件。",
+  "severity": "high",
+  "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:U/C:H/I:H/A:H",
+  "rationale": "MVG path 原语的 ghost-line 分支不校验 path_info 容量，堆越界写；写入内容为 PathInfo 结构体，可影响相邻堆对象",
+  "reviewed_by": null,
+  "reviewed_at": null,
+  "dimensions": {
+    "attack_vector": {
+      "value": "network",
+      "evidence": "GraphicsMagick 常被用于服务端图片/图形转换，MVG 属不可信输入"
+    },
+    "privileges_required": {
+      "value": "none",
+      "evidence": "无需认证，解析路径即可触发"
+    },
+    "user_interaction": {
+      "value": "required",
+      "evidence": "需目标程序处理攻击者提供的 MVG 文件"
+    },
+    "observed_impact": {
+      "value": "memory_corruption_confirmed",
+      "evidence": "ASAN: heap-buffer-overflow WRITE @ render.c:942:22 in ConvertPrimitiveToPath；vul exit=1 / fix exit=0"
+    },
+    "reachability_evidence": {
+      "value": "confirmed",
+      "evidence": "propagation.json 记录 input_bytes -> 2*i+3 分配 -> 941-946 无检查写入；模型从 10 个候选中预测 942，与实际崩溃行一致"
+    },
+    "deployment_conditions": {
+      "value": "default_build",
+      "evidence": "官方 vul 镜像默认构建即复现"
+    }
+  },
+  "_open_questions": [
+    "ghost-line 越界写能否进一步控制写入内容（决定能否升级为 code_execution）",
+    "MVG 触发形是否等价于真实应用中可达的输入形态"
+  ]
+}

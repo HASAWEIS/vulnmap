@@ -1,0 +1,90 @@
+{
+  "schema": "vulnmap.verify.v1",
+  "verdict": "pass",
+  "infra_error": false,
+  "reason": "",
+  "evidence": {
+    "vul_asan": "==7==ERROR: AddressSanitizer: stack-buffer-overflow on address 0x7491e8bb0820 at pc 0x0000004bf1e3 bp 0x7fff96474bd0 sp 0x7fff96474390",
+    "fix_clean": true,
+    "root_cause": "strong"
+  },
+  "root_cause": {
+    "matched": true,
+    "confidence": "strong",
+    "reason": "first_user_frame_matches_sink",
+    "evidence": {
+      "diagnosis": {
+        "sanitizer": "AddressSanitizer",
+        "kind": "stack-buffer-overflow",
+        "write": true
+      },
+      "cwe_expected": [
+        "CWE-121",
+        "CWE-125"
+      ],
+      "cwe_claimed": "CWE-121",
+      "sink": {
+        "file": "ghostpdl/pdf/pdf_font.c",
+        "line": 332,
+        "symbol": "memcpy",
+        "function": "pdfi_open_CIDFont_substitute_file"
+      },
+      "first_user_frame": {
+        "func": "pdfi_open_CIDFont_substitute_file",
+        "file": "/src/ghostpdl/./pdf/pdf_font.c",
+        "line": 332
+      },
+      "line_delta": 0
+    },
+    "provenance": {
+      "run_id": "r-ca6f1fd2fd342b2a3b19",
+      "binary_sha256": "bb7a2341fcbd7cf6bd3cd4c1896593cba342b7f16b2ef962d147c88ad9631114",
+      "source_sha256": "bf2bd446a609f469110fd793ea397e27e6586a2921476176682374559d964cca",
+      "image_digest": "sha256:e57980e7ebcd63856a6c1976d603f4bcbac17138f63d57531ee1c08cb38caaef",
+      "log": "logs/V4.pdf-basefont4096.44034-vul.log",
+      "matches": true
+    }
+  },
+  "fix_root_cause": {},
+  "candidates_tried": 1,
+  "poc": {
+    "path": "artifacts/verify/pdf-basefont4096.bin",
+    "sha256": "58f7f4b3d8ca65bfa4fbd5838301d5181c6a703df60fad4a444feec80a58c59d",
+    "size": 8882
+  },
+  "vul": {
+    "exit_code": 1,
+    "asan": "==7==ERROR: AddressSanitizer: stack-buffer-overflow on address 0x7491e8bb0820 at pc 0x0000004bf1e3 bp 0x7fff96474bd0 sp 0x7fff96474390",
+    "log": "logs/V4.pdf-basefont4096.44034-vul.log"
+  },
+  "fix": {
+    "exit_code": 0,
+    "log": "logs/V4.pdf-basefont4096.44034-fix.log"
+  },
+  "notes": "pdf-basefont4096",
+  "claim_source_mode": "rule",
+  "candidates": [
+    {
+      "candidate": "pdf-basefont4096",
+      "claim_id": "c-1",
+      "subject": "pdfi_open_CIDFont_substitute_file",
+      "proposed_by": "rule",
+      "evidence_source": "error_txt",
+      "input_sha256": "58f7f4b3d8ca65bfa4fbd5838301d5181c6a703df60fad4a444feec80a58c59d",
+      "vul_exit": 1,
+      "fix_exit": 0,
+      "verdict": "pass",
+      "reason": ""
+    }
+  ],
+  "model_loop": {},
+  "claim_used": {
+    "id": "c-1",
+    "subject": "pdfi_open_CIDFont_substitute_file",
+    "proposed_by": "rule",
+    "evidence_source": "error_txt"
+  },
+  "upstream": {
+    "artifacts/locate/findings.json": "c51c842919b39c109fcd7f90f09de6e1ed0cb5e9fe567ae69c2e40af809be34f"
+  }
+}

@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>实验 · vulnmap</title><link rel="stylesheet" href="style.css?v=202611161150"></head>
+<body>
+<div class="app">
+  <aside class="sidebar" id="sidebar"></aside>
+  <div class="main">
+    <header class="tophead" id="tophead"></header>
+    <div class="content" id="content"><div class="loading">加载中…</div></div>
+  </div>
+</div>
+<script src="app.js?v=202611161130"></script>
+<script>
+renderShell("lab", {
+  title: "实验记录",
+  sub: "含失败与自我修正，失败项保留在分母中",
+  chips: [["只读", "dark"]],
+});
+
+api("/api/experiments").then(d => {
+  api("/api/cases").then(c => renderProjects(c.items)).catch(()=>{});
+  let html = "";
+  if (d.ab && d.ab.rows && d.ab.rows.length) {
+    html += `<section class="panel">
+      <div class="panel-hd"><h2>对照实验</h2>
+        <span class="meta">规则基线 vs 规则 + 模型</span></div>
+      <div class="panel-bd">
+        <div class="note">结果可正可负——模型在 CG-02 上把缺陷行从 690 指到 693，被门禁正确拦下。</div>
+        <div class="ab">${d.ab.rows.map(r => {
+          const b = r.baseline||{}, a = r.augmented||{};
+          const changed = b.stage !== a.stage;
+          return `<div class="abrow">
+            <div class="abname">${esc(r.case)}</div>
+            <div class="abside"><div class="lbl">规则基线</div>${stageBadge(b.stage)}</div>
+            <div class="abarrow" style="color:${changed?"var(--ok)":"var(--ink-300)"}">${changed?"→":"="}</div>
+            <div class="abside"><div class="lbl">规则 + 模型</div>${stageBadge(a.stage)}
+              <div class="val">定位 ${a.verified_pinpoint?"✓":"✗"} · 生成 ${a.verified_generation?"✓":"✗"}</div>
+            </div></div>`;
+        }).join("")}</div>
+      </div></section>`;
+  }
+  html += `<section class="panel">
+    <div class="panel-hd"><h2>全部记录</h2>
+      <span class="meta">${d.items.length} 条</span></div>
+    <div class="tl">${d.items.map(e => `
+      <div class="tl-item"><span class="nm">${esc(e.dir)}</span>
+        <span class="ds">${esc(e.summary || "无摘要")}</span></div>`).join("")}</div>
+  </section>`;
+  $("#content").innerHTML = html;
+}).catch(e => fail($("#content"), e));
+</script>
+</body>
+</html>

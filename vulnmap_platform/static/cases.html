@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>案例 · vulnmap</title>
+<link rel="stylesheet" href="style.css?v=202611161150">
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar" id="sidebar"></aside>
+  <div class="main">
+    <header class="tophead" id="tophead"></header>
+    <div class="content" id="content"><div class="loading">加载中…</div></div>
+  </div>
+</div>
+<script src="app.js?v=202611161130"></script>
+<script>
+// 纯路由：hash 决定显示「列表」还是「单个案例详情」，不依赖行内状态
+const FILTERS = [
+  ["all","全部"], ["dual","双端成立"], ["causal","因果链闭合"],
+  ["high","高危"], ["failed","未通过"],
+];
+let ALL = [], FILTER = "all";
+const params = new URLSearchParams(location.search);
+const includeExperiments = params.get('include_experiments') === '1';
+const selectedBench = params.get('benchmark') || '';
+const caseScope = includeExperiments ? '全部运行目录，含实验复跑，不计为新增独立根因。' : '只显示正式台账，不包含实验复跑。';
+function scopeHref(experiments){
+  const q=new URLSearchParams();
+  if(experiments)q.set('include_experiments','1');
+  if(selectedBench)q.set('benchmark',selectedBench);
+  return 'cases.html'+(q.size?'?'+q:'');
+}
+
+const scopeItems = () => ALL.filter(c=>!selectedBench||c.benchmark===selectedBench);
+const match = c => ({
+  all: true, dual: c.local_verified, causal: c.causal_chain_verified,
+  high: c.high_severity_confirmed,
+  failed: !c.local_verified,
+}[FILTER]);
+
+function stageBar(s, detail = {}) {
+  const steps = [
+    ["侦察", s.has_report ? "done" : ""],
+    ["定位", s.has_report ? "done" : ""],
+    ["验证", s.local_verified ? "done" : (s.vul_exit != null ? "fail" : "")],
+    ["利用", detail.case?.exploit?.on_target === true && detail.case?.exploit?.executed === true ? "done" : ""],
+    ["报告", s.has_report ? "done" : ""],
+  ];
+  return `<ul class="steps">${steps.map(([n, st], i) => `
+    <li class="${st}"><span class="pt">${st === "done" ? "✓" : (st === "fail" ? "✕" : i + 1)}</span>
+    <span class="nm">${esc(n)}</span></li>`).join("")}</ul>`;
+}
+
+let CASE_QUERY = '', CASE_PAGE = 1;
+const CASE_PAGE_SIZE = 12;
+function listItems(){const q=CASE_QUERY.toLowerCase().trim();return scopeItems().filter(match).filter(c=>!q||[c.case_id,c.task_id,c.project,c.cwe].some(v=>String(v||'').toLowerCase().includes(q)));}
+function renderListRows(){
+ const items=listItems(),pages=Math.max(1,Math.ceil(items.length/CASE_PAGE_SIZE));CASE_PAGE=Math.min(CASE_PAGE,pages);
+ const visible=items.slice((CASE_PAGE-1)*CASE_PAGE_SIZE,CASE_PAGE*CASE_PAGE_SIZE);
+ $("#list-rows").innerHTML=visible.length?visible.map(c=>`<tr>
+ <td><a class="case-link" href="${scopeHref(includeExperiments)}#${encodeURIComponent(c.dir)}">${esc(c.case_id)} ${icon('arrow')}</a><span class="cell-secondary">${esc(c.project||'—')}</span></td>
+ <td class="mono task-cell" title="${esc(c.task_id)}">${esc(c.task_id||'—')}</td><td class="mono dim">${esc(c.cwe||'—')}</td>
+ <td>${layerBadge('local_verified',c.local_verified)}</td><td>${layerBadge('causal_chain_verified',c.causal_chain_verified)}</td>
+ <td>${layerBadge('high_severity_confirmed',c.high_severity_confirmed)}</td><td>${stageBadge(c.stage)}</td></tr>`).join(''):'<tr><td colspan="7"><div class="empty">该筛选下没有匹配案例</div></td></tr>';
+ $('#list-count').textContent=items.length+' 个结果';$('#list-page').textContent=`第 ${CASE_PAGE} / ${pages} 页`;
+ $('#list-prev').disabled=CASE_PAGE===1;$('#list-next').disabled=CASE_PAGE===pages;
+}
+function renderList(){
+ renderHeader('cases',{title:'漏洞案例',sub:'按台账查看验证结果、因果证据与交付缺口。'});
+ const cnt=k=>{const old=FILTER;FILTER=k;const n=scopeItems().filter(match).length;FILTER=old;return n;};
+ $('#content').innerHTML=`<section class="panel cases-panel"><div class="panel-hd"><div><h2>${selectedBench ? esc(BENCH_LABEL[selectedBench] || selectedBench) : "案例证据库"} <span class="count-label">${scopeItems().length}</span></h2><p>${caseScope}</p></div><a class="button-link" href="index.html">返回总览 ${icon('arrow')}</a></div>
+ <div class="case-tools"><div class="filter-tabs" role="group" aria-label="筛选案例">${FILTERS.map(([k,t])=>`<button class="case-filter ${k===FILTER?'on':''}" aria-pressed="${k===FILTER}" onclick="setFilter('${k}')">${t} ${cnt(k)}</button>`).join('')}</div><div class="case-search">${icon('search')}<input id="list-search" type="search" value="${esc(CASE_QUERY)}" placeholder="搜索案例、项目、CWE…" aria-label="搜索案例库"></div></div>
+ <div class="tw" role="region" aria-label="案例列表" tabindex="0"><table class="overview-table"><thead><tr><th scope="col">案例 / 项目</th><th scope="col">任务 ID</th><th scope="col">CWE</th><th scope="col">本地验证</th><th scope="col">因果链</th><th scope="col">高危</th><th scope="col">状态</th></tr></thead><tbody id="list-rows"></tbody></table></div>
+ <div class="table-footer"><div><span id="list-count"></span> · <a class="scope-link" href="${scopeHref(!includeExperiments)}">${includeExperiments?"只看正式台账":"包含实验复跑"}</a>${selectedBench?` · <a class="scope-link" href="cases.html${includeExperiments?"?include_experiments=1":""}">清除赛道筛选</a>`:""}</div><div class="pagination"><span id="list-page"></span><button id="list-prev" aria-label="上一页">‹</button><button id="list-next" aria-label="下一页">›</button></div></div></section>`;
+ $('#list-search').oninput=e=>{CASE_QUERY=e.target.value;CASE_PAGE=1;renderListRows();};
+ $('#list-prev').onclick=()=>{CASE_PAGE--;renderListRows();};$('#list-next').onclick=()=>{CASE_PAGE++;renderListRows();};
+ renderListRows();
+}
+function setFilter(k){FILTER=k;CASE_PAGE=1;renderList();}
+
+async function renderDetail(dir) {
+  const head = $("#tophead");
+  let d;
+  try { d = await api(`/api/cases/${encodeURIComponent(dir)}`); }
+  catch (e) {
+    head.innerHTML = `<div class="crumb"><a href="cases.html">← 返回案例列表</a></div>
+      <div class="title-row"><h1>未找到案例</h1></div>`;
+    $("#content").innerHTML = `<div class="error">${esc(dir)} 不存在</div>`;
+    return;
+  }
+  const s = d.summary, a = d.case.acceptance || {}, st = d.case.stage_status || {};
+  const p = st.propagation || {}, ml = d.verify.model_loop || {};
+  const els = Object.entries(p.elements || {});
+
+  renderHeader('cases',{title:`${s.case_id} · ${s.task_id || ''}`,sub:`${s.project || ''} · ${s.cwe || ''} · ${s.benchmark || ''}`});
+
+  $("#content").innerHTML = `
+    <section class="panel">
+      <div class="panel-hd"><h2>验收链路</h2>
+        <span class="meta">${esc(s.project||"")} · ${esc(s.cwe||"")}
+          <button class="text-button" onclick="rerunCase('${esc(dir)}')">重跑本案例</button></span></div>
+      <div class="panel-bd">${stageBar(s, d)}
+
+        <div class="fields" style="margin:26px 0 8px">
+          <div class="field"><div class="k">双端退出码</div>
+            <div class="v ${s.local_verified?"ok":"bad"}">vul ${esc(s.vul_exit ?? "—")} / fix ${esc(s.fix_exit ?? "—")}</div></div>
+          <div class="field"><div class="k">根因强度</div>
+            <div class="v">${esc(s.root_cause || "—")}</div></div>
+          <div class="field"><div class="k">缺陷类别</div>
+            <div class="v ${a.defect_class==="harness_ub"?"bad":""}">${esc(a.defect_class||"—")}</div></div>
+          <div class="field"><div class="k">PoC 大小</div>
+            <div class="v">${esc((d.case.poc||{}).size ?? "—")} B</div></div>
+        </div>
+      </div>
+
+      <div class="fold"><details open>
+        <summary>验收状态与证据</summary>
+        <div class="fold-bd">
+          <div class="cols">
+            <div>
+              <h4>四层门禁</h4>
+              <div class="kv-row"><span class="k">双端复现</span><span class="v">
+                ${layerBadge("local_verified", a.local_verified)}</span></div>
+              <div class="kv-row"><span class="k">因果链闭合</span><span class="v">
+                ${layerBadge("causal_chain_verified", a.causal_chain_verified)}</span></div>
+              <div class="kv-row"><span class="k">高危成立</span><span class="v">
+                ${layerBadge("high_severity_confirmed", a.high_severity_confirmed)}</span></div>
+              <h4 style="margin-top:20px">收尾材料</h4>
+              <div class="kv-row"><span class="k">严重性论证</span><span class="v">
+                ${badge(a.severity_assessed?"已论证":"未论证", a.severity_assessed?"b-ok":"b-warn")}</span></div>
+              <div class="kv-row"><span class="k">人工复核</span><span class="v">
+                ${badge(a.human_reviewed?"已签字":"待签字", a.human_reviewed?"b-ok":"b-dim")}</span></div>
+              <div class="kv-row"><span class="k">官方回执（可选）</span><span class="v">
+                ${badge(a.official_receipt?"已取得":"待提交", a.official_receipt?"b-ok":"b-dim")}</span></div>
+            </div>
+            <div>
+              <h4>因果链要素 · ${esc(p.kind||"—")}</h4>
+              <ul class="plain">${els.length ? els.map(([k,v]) =>
+                `<li class="${v.present?"ok":"bad"}">${esc(k)}</li>`).join("")
+                : "<li>无传播证据记录</li>"}</ul>
+              <h4 style="margin-top:20px">模型参与</h4>
+              <div class="kv-row"><span class="k">调用次数</span><span class="v">
+                ${esc(d.case.model_contribution?.llm_calls ?? 0)}</span></div>
+              <div class="kv-row"><span class="k">结论来源</span><span class="v">
+                ${esc(s.model.from === "llm" ? "模型" : "规则基线")}</span></div>
+              <div class="kv-row"><span class="k">定位贡献</span><span class="v">
+                ${badge(s.model.pinpoint?"已验证":"无", s.model.pinpoint?"b-purple":"b-dim")}</span></div>
+              <div class="kv-row"><span class="k">生成贡献</span><span class="v">
+                ${badge(s.model.generation?"已验证":"无", s.model.generation?"b-purple":"b-dim")}</span></div>
+            </div>
+          </div>
+          <div class="kv-row" style="margin-top:16px"><span class="k">sink</span><span class="v">
+            ${esc((d.case.sink||{}).file||"—")}${(d.case.sink||{}).line?":"+esc(d.case.sink.line):""}</span></div>
+          <div class="kv-row"><span class="k">PoC sha256</span><span class="v">
+            ${esc((d.case.poc||{}).sha256||"—")}</span></div>
+        </div>
+      </details></div>
+
+      ${ml.detail && ml.detail.length ? `<div class="fold"><details>
+        <summary>模型闭环轮次（${ml.detail.length}）</summary>
+        <div class="fold-bd"><div class="tw"><table>
+          <thead><tr><th>轮</th><th>判定</th><th>编码</th><th>大小</th><th>vul</th><th>崩溃行</th></tr></thead>
+          <tbody>${ml.detail.map(r=>`<tr>
+            <td class="mono">${esc(r.round)}</td>
+            <td>${badge(r.verdict||"—", r.verdict==="pass"?"b-ok":r.verdict==="not_triggered"?"b-warn":"b-dim")}</td>
+            <td class="mono">${esc(r.encoding||"—")}</td>
+            <td class="mono">${esc(r.size)} B</td>
+            <td class="mono">${esc(r.vul_exit ?? "—")}</td>
+            <td class="mono">${esc(r.crash_line ?? "—")}</td></tr>`).join("")}</tbody>
+        </table></div></div></details></div>` : ""}
+    </section>`;
+}
+
+// 路由
+function route() {
+  const dir = decodeURIComponent(location.hash.replace(/^#/, ""));
+  if (dir) renderDetail(dir);
+  else renderList();
+}
+window.addEventListener("hashchange", route);
+
+// 骨架先渲染（侧栏 + 顶栏），再按路由填内容
+renderShell("cases", { title: "案例验收", sub: "加载中…" });
+
+api("/api/cases"+(includeExperiments?"?include_experiments=1":"")).then(cs => {
+  ALL = cs.items;
+  renderProjects(cs.items, decodeURIComponent(location.hash.replace(/^#/, "")).split("-")[0]);
+  route();
+}).catch(e => fail($("#content"), e));
+</script>
+</body>
+</html>

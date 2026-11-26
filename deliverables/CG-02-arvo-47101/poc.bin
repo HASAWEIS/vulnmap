@@ -1,0 +1,5 @@
+.file 4294967289 "x.c"
+.text
+.globl _start
+_start:
+ nop

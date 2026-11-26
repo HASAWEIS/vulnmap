@@ -1,0 +1,25 @@
+{
+  "source": "manual_review_of_source",
+  "verified_by": "manual",
+  "defect_kind": "memory_corruption",
+  "elements": {
+    "input_bytes": {
+      "value": "汇编文本中的 .file <slot> \"name\" 指令，slot 取 4294967289 (0xFFFFFFF9)",
+      "evidence": "verify PoC artifacts/verify/gas-file4294967289.bin（.file 4294967289 \"x.c\"）",
+      "verified_by": "manual"
+    },
+    "reaches_sink": {
+      "value": ".file -> dwarf2_directive_filename(:1190) -> allocate_filename_to_slot(num) -> assign_file_to_slot(i=num,:925) -> memset(:690)",
+      "evidence": "dwarf2dbg.c:1190 解析 .file；:925 调用；:690 memset",
+      "verified_by": "manual"
+    },
+    "missing_check": {
+      "value": "assign_file_to_slot 中 `files_allocated = i + 32` 在 unsigned int 下溢出（4294967289+32 -> 25）；回绕检查 `files_allocated <= old` 判不出（25 > old），随后 `memset(files+old, 0, (i+32-old)*32)` 用 unsigned long 运算得 137438954272 字节",
+      "evidence": "dwarf2dbg.c:682 `files_allocated = i + 32`；:684 回绕检查失效；:690 memset 长度巨大",
+      "verified_by": "manual",
+      "note": "ASAN 报 WRITE of size 137438954272 = (4294967289+32-0)*32，与推导一致；补丁将 i 改为 unsigned int 并补 files_allocated < i 检查"
+    }
+  },
+  "verdict": "causal_chain_complete_by_manual_review",
+  "severity_note": "堆缓冲区写越界且写长度达 1.3e11 字节，必然崩溃；是否可转化为控制流劫持需单独评估"
+}

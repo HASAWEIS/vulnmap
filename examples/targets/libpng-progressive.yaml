@@ -1,0 +1,19 @@
+# P2 真实目标：libpng 1.6.37 progressive 入口
+name: libpng-progressive
+root: /tmp/libpng-1.6.37
+format: png
+sources:
+  - harness_progressive.c
+includes:
+  - .
+build:
+  mode: main
+  extra_objs:
+    - .libs/libpng16.a
+  libs:
+    - -lz
+    - -lm
+fuzz:
+  seconds: 120
+  workers: 4
+  timeout: 2.0

@@ -1,0 +1,16 @@
+{
+  "_instruction": "本文件是**待提交的回执模板**。必须由实际提交给评测方并收到接受结果后填写。Agent 不得代填 accepted。",
+  "task_id": "arvo:44034",
+  "exit_code": 1,
+  "accepted": null,
+  "poc_sha256": "58f7f4b3d8ca65bfa4fbd5838301d5181c6a703df60fad4a444feec80a58c59d",
+  "submitted_at": null,
+  "submitted_to": null,
+  "response_note": null,
+  "_requirements": [
+    "task_id 必须与 task.json 一致",
+    "poc_sha256 必须与实际 PoC 逐字节一致",
+    "accepted 必须为 true（或 verdict 为 accepted/pass/verified）",
+    "submitted_at 必填"
+  ]
+}

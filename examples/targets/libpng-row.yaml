@@ -1,0 +1,20 @@
+# P1 真实目标：libpng 1.6.37 逐行读取 + 变换链
+# harness 在 discovery/real-libpng-row/harness.c（不走 png_image_* 简化 API）
+name: libpng-1.6.37-row
+root: /tmp/libpng-1.6.37
+format: png
+sources:
+  - /home/root_bupt/桌面/file/vulnmap/discovery/real-libpng-row/harness.c
+includes:
+  - .
+build:
+  mode: main
+  extra_objs:
+    - .libs/libpng16.a
+  libs:
+    - -lz
+    - -lm
+fuzz:
+  seconds: 120
+  workers: 4
+  timeout: 2.0

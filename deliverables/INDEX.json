@@ -1,0 +1,32 @@
+{
+  "packages": [
+    {
+      "case": "CG-01-arvo-44034",
+      "stage": "causal_chain_verified",
+      "severity": "reviewed",
+      "course_ready": false,
+      "files": 9
+    },
+    {
+      "case": "CG-02-arvo-47101",
+      "stage": "local_verified_pending_evidence",
+      "severity": "draft_only",
+      "course_ready": false,
+      "files": 9
+    },
+    {
+      "case": "CG-07-arvo-10096",
+      "stage": "causal_chain_verified",
+      "severity": "draft_only",
+      "course_ready": false,
+      "files": 9
+    },
+    {
+      "case": "EG-02-arvo-44034",
+      "stage": "causal_chain_verified",
+      "severity": "draft_only",
+      "course_ready": false,
+      "files": 7
+    }
+  ]
+}

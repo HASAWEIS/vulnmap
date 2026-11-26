@@ -1,0 +1,7 @@
+{
+  "schema": "vulnmap.observation_point_catalog.v1",
+  "points": [
+    {"id": "input_processed", "probe": "input_processed"},
+    {"id": "guard", "probe": "checkpoint:guard"}
+  ]
+}

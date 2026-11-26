@@ -1,0 +1,2 @@
+# 运行时依赖：无（全部使用 Python 标准库）
+# 见 pyproject.toml 的 dependencies = []

@@ -1,0 +1,35 @@
+{
+  "_instruction": "待填写的复核模板，不是结论。复核人核对后另存为 review.json。Agent 不得代填。",
+  "case_id": "CG-02",
+  "task_id": "arvo:47101",
+  "poc_sha256": "7c3d6ff89a4f70cbfd8eb879c3d806633abf8d96b37a1f570106b0882ddbf622",
+  "checklist": [
+    {
+      "item": "双端差分成立",
+      "agent_claim": true,
+      "how_to_verify": "按 README 跑两镜像",
+      "reviewer_verdict": null
+    },
+    {
+      "item": "PoC 哈希一致",
+      "agent_claim": true,
+      "how_to_verify": "sha256sum 比对",
+      "reviewer_verdict": null
+    },
+    {
+      "item": "因果链三要素齐备",
+      "agent_claim": true,
+      "how_to_verify": "阅读 propagation.json",
+      "reviewer_verdict": null
+    },
+    {
+      "item": "高危判定成立",
+      "agent_claim": false,
+      "how_to_verify": "阅读 severity.DRAFT.json（草案，未评审）",
+      "reviewer_verdict": null
+    }
+  ],
+  "reviewer": null,
+  "reviewed_at": null,
+  "scope": null
+}

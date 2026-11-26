@@ -1,0 +1,12 @@
+# 复现锁定：由脚本读取 importlib.metadata 实测生成，非手写
+# 生成环境：Python 3.12.14 (CPython), Linux x86_64
+#
+# 运行时：无第三方包（全部标准库）
+# 开发/测试：
+pytest==9.1.1
+iniconfig==2.3.0
+packaging==26.3
+pluggy==1.6.0
+#
+# 标准库关键版本（影响行为，记录备查）
+# sqlite3 runtime = 3.53.1

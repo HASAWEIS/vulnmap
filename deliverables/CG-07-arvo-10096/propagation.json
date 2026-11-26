@@ -1,0 +1,30 @@
+{
+  "source": "manual_review_of_source + model_pinpoint + executed_crash",
+  "verified_by": "manual",
+  "defect_kind": "memory_corruption",
+  "elements": {
+    "input_bytes": {
+      "value": "MVG path 原语中的坐标点数量（primitive_info 条数 i）。构造为大量未闭合子路径时，每个子路径都会额外写入 2 个 ghost 点",
+      "evidence": "PoC 为 51B MVG（candidate model-loop-r2），经 /out/coder_MVG_fuzzer 处理",
+      "verified_by": "manual"
+    },
+    "reaches_sink": {
+      "value": "render.c:881 path_info=MagickAllocateArray(PathInfo *, (2*i+3)) 按 2*i+3 分配 -> 875 行统计 i -> ghost-line 分支 941-946 在**无边界检查**下连续写 path_info[n]、n++、path_info[n]、n++ -> 当未闭合子路径足够多时 n 越过 2*i+3 容量，越界写落在 render.c:942",
+      "evidence": "ASAN: heap-buffer-overflow @ render.c:942:22 in ConvertPrimitiveToPath；vul exit=1 / fix exit=0",
+      "verified_by": "manual"
+    },
+    "missing_check": {
+      "value": "941 行写 path_info[start] 与 942/945 行写 path_info[n] 之前，均未校验 n 是否仍小于分配容量 (2*i+3)；ghost-line 是唯一成对额外加点且不带保护的路径",
+      "evidence": "941-946 段无任何 n 与容量比较；正常路径的写入都被循环条件约束",
+      "verified_by": "manual"
+    }
+  },
+  "cross_check": {
+    "model_pinpoint": 942,
+    "executed_crash_line": 942,
+    "consistent": true,
+    "note": "模型在**执行之前**从源码预测 942（10 个候选中选 1），随后真实运行崩溃在同一行——预测与验证独立"
+  },
+  "verdict": "causal_chain_complete_by_manual_review",
+  "severity_note": "堆越界写，写入内容为 path_info 结构体（受控程度有限）；是否可升级为代码执行需单独评估，本次不主张"
+}

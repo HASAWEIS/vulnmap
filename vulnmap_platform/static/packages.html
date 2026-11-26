@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>交付包 · vulnmap</title><link rel="stylesheet" href="style.css?v=202611161150"></head>
+<body>
+<div class="app">
+  <aside class="sidebar" id="sidebar"></aside>
+  <div class="main">
+    <header class="tophead" id="tophead"></header>
+    <div class="content" id="content"><div class="loading">加载中…</div></div>
+  </div>
+</div>
+<script src="app.js?v=202611161130"></script>
+<script>
+renderShell("packages", {
+  title: "交付证据包",
+  sub: "每包可独立复核：PoC、验收状态、复现步骤、材料哈希",
+  chips: [["只读", "dark"]],
+});
+const SEV = { reviewed:["严重性已评审","b-ok"], draft_only:["仅草案","b-warn"], absent:["无论证","b-dim"] };
+
+api("/api/packages").then(d => {
+  api("/api/cases").then(c => renderProjects(c.items)).catch(()=>{});
+  $("#content").innerHTML = `
+    <div class="note">
+      <b>course_ready 全部为 false</b>：该字段为现有后端记录；以复核与材料清单为准。官方回执如有可附，不是课程必需项。
+      包内已附 <code>review.TEMPLATE.json</code> / <code>receipt.TEMPLATE.json</code>
+      供填写——<b>Agent 不代填</b>。
+    </div>
+    <div class="cards">${d.items.map(p => {
+      const sev = SEV[p.severity] || [p.severity||"—","b-dim"];
+      return `<div class="card">
+        <div class="eyebrow">Evidence Package</div>
+        <h3>${esc(p.case)}</h3>
+        <div style="display:flex;gap:7px;flex-wrap:wrap">
+          ${stageBadge(p.stage)}${badge(sev[0],sev[1])}
+          ${badge(p.course_ready?"可交付":"未达", p.course_ready?"b-ok":"b-dim")}
+        </div>
+        <div class="files">${(p.files_detail||[]).map(f=>
+          `<div class="row"><span>${esc(f.name)}</span>
+           <span class="sha">${esc(f.sha256.slice(0,8))}</span></div>`).join("")}</div>
+        <div class="meta">${esc(p.files)} 个文件 · sha256sum -c 可校验</div>
+      </div>`;
+    }).join("")}</div>`;
+}).catch(e => fail($("#content"), e));
+</script>
+</body>
+</html>

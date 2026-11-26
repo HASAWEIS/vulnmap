@@ -1,0 +1,123 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080" viewBox="0 0 1920 1080"><defs><marker id="arr" markerWidth="10" markerHeight="10" refX="8" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8" fill="#073B8D"/></marker></defs><rect width="1920" height="1080" fill="white"/>
+<rect x="40" y="40" width="12" height="66" rx="0" fill="#073B8D" stroke="none" stroke-width="2"/>
+<text x="76" y="91" font-family="Noto Sans CJK SC, sans-serif" font-size="52" fill="#073B8D" font-weight="700" text-anchor="start">核心技术路线</text>
+<text x="78" y="135" font-family="Noto Sans CJK SC, sans-serif" font-size="22" fill="#617087" font-weight="400" text-anchor="start">模型提出假设，规则构造种子，Fuzz 与重放提供证据；不是模型直接判定漏洞</text>
+<text x="1875" y="72" font-family="Noto Sans CJK SC, sans-serif" font-size="28" fill="#073B8D" font-weight="700" text-anchor="end">VULNMAP</text>
+<text x="1875" y="108" font-family="Noto Sans CJK SC, sans-serif" font-size="20" fill="#617087" font-weight="400" text-anchor="end">漏洞挖掘与验证平台</text>
+<path d="M40,155 L1880,155" fill="none" stroke="#B7C7DE" stroke-width="1" stroke-linejoin="round"/>
+<text x="44" y="1051" font-family="Noto Sans CJK SC, sans-serif" font-size="18" fill="#617087" font-weight="400" text-anchor="start">已接通：假设 → 规则种子；尚需证明：LLM 相对基线的增益。流程完成不等于高危成立。</text>
+<text x="1876" y="1051" font-family="Noto Sans CJK SC, sans-serif" font-size="18" fill="#073B8D" font-weight="700" text-anchor="end">02 / 03</text>
+<rect x="40" y="190" width="344" height="112" rx="12" fill="#073B8D" stroke="none" stroke-width="2"/>
+<text x="62" y="226" font-family="Noto Sans CJK SC, sans-serif" font-size="21" fill="#C6D8F5" font-weight="700" text-anchor="start">01</text>
+<text x="212" y="248" font-family="Noto Sans CJK SC, sans-serif" font-size="32" fill="white" font-weight="700" text-anchor="middle">目标画像</text>
+<text x="212" y="281" font-family="Noto Sans CJK SC, sans-serif" font-size="20" fill="white" font-weight="400" text-anchor="middle">D0 / D1：从源码出发</text>
+<rect x="40" y="320" width="344" height="552" rx="12" fill="white" stroke="#365AA2" stroke-width="2"/>
+<rect x="58" y="343" width="308" height="142" rx="12" fill="#EAF0FA" stroke="#B7C7DE" stroke-width="2"/>
+<text x="74" y="380" font-family="Noto Sans CJK SC, sans-serif" font-size="24" fill="#073B8D" font-weight="700" text-anchor="start">固定输入边界</text>
+<text x="74" y="420" font-family="Noto Sans CJK SC, sans-serif" font-size="19" fill="#18283F" font-weight="400" text-anchor="start">源码 / 二进制 / 构建描述</text>
+<text x="74" y="451" font-family="Noto Sans CJK SC, sans-serif" font-size="19" fill="#18283F" font-weight="400" text-anchor="start">不输入官方 PoC 或补丁</text>
+<path d="M212,485 L212,506" fill="none" stroke="#073B8D" stroke-width="2" stroke-linejoin="round" marker-end="url(#arr)"/>
+<rect x="58" y="512" width="308" height="142" rx="12" fill="white" stroke="#B7C7DE" stroke-width="2"/>
+<text x="74" y="549" font-family="Noto Sans CJK SC, sans-serif" font-size="24" fill="#073B8D" font-weight="700" text-anchor="start">静态画像与调用点</text>
+<text x="74" y="589" font-family="Noto Sans CJK SC, sans-serif" font-size="19" fill="#18283F" font-weight="400" text-anchor="start">入口 / 格式 / 危险函数</text>
+<text x="74" y="620" font-family="Noto Sans CJK SC, sans-serif" font-size="19" fill="#18283F" font-weight="400" text-anchor="start">近似可达性 / 参数线索</text>
+<path d="M212,654 L212,675" fill="none" stroke="#073B8D" stroke-width="2" stroke-linejoin="round" marker-end="url(#arr)"/>
+<rect x="58" y="681" width="308" height="142" rx="12" fill="#EAF0FA" stroke="#B7C7DE" stroke-width="2"/>
+<text x="74" y="718" font-family="Noto Sans CJK SC, sans-serif" font-size="24" fill="#073B8D" font-weight="700" text-anchor="start">选点与台账</text>
+<text x="74" y="758" font-family="Noto Sans CJK SC, sans-serif" font-size="19" fill="#18283F" font-weight="400" text-anchor="start">固定评分排序 / 随机对照</text>
+<text x="74" y="789" font-family="Noto Sans CJK SC, sans-serif" font-size="19" fill="#18283F" font-weight="400" text-anchor="start">记录计划与未覆盖调用点</text>
+<rect x="40" y="893" width="344" height="101" rx="12" fill="#FFF2E6" stroke="#073B8D" stroke-width="2"/>
+<text x="212.0" y="939.5" font-family="Noto Sans CJK SC, sans-serif" font-size="22" fill="#18283F" font-weight="700" text-anchor="middle">阶段产物</text>
+<text x="212.0" y="971.5" font-family="Noto Sans CJK SC, sans-serif" font-size="19" fill="#617087" font-weight="400" text-anchor="middle">target.json / callsites.json</text>
+<path d="M386,595 L412,595" fill="none" stroke="#073B8D" stroke-width="3" stroke-linejoin="round" marker-end="url(#arr)"/>
+<rect x="414" y="190" width="344" height="112" rx="12" fill="#365AA2" stroke="none" stroke-width="2"/>
+<text x="436" y="226" font-family="Noto Sans CJK SC, sans-serif" font-size="21" fill="#C6D8F5" font-weight="700" text-anchor="start">02</text>
+<text x="586" y="248" font-family="Noto Sans CJK SC, sans-serif" font-size="32" fill="white" font-weight="700" text-anchor="middle">Agent 分析</text>
+<text x="586" y="281" font-family="Noto Sans CJK SC, sans-serif" font-size="20" fill="white" font-weight="400" text-anchor="middle">D1.5：默认 LLM</text>
+<rect x="414" y="320" width="344" height="552" rx="12" fill="white" stroke="#365AA2" stroke-width="2"/>
+<rect x="432" y="343" width="308" height="142" rx="12" fill="#EAF0FA" stroke="#B7C7DE" stroke-width="2"/>
+<text x="448" y="380" font-family="Noto Sans CJK SC, sans-serif" font-size="24" fill="#073B8D" font-weight="700" text-anchor="start">并行只读分析</text>
+<text x="448" y="420" font-family="Noto Sans CJK SC, sans-serif" font-size="19" fill="#18283F" font-weight="400" text-anchor="start">调用点元数据 + 源码窗口</text>
+<text x="448" y="451" font-family="Noto Sans CJK SC, sans-serif" font-size="19" fill="#18283F" font-weight="400" text-anchor="start">不执行目标 / 不给 verdict</text>
+<path d="M586,485 L586,506" fill="none" stroke="#073B8D" stroke-width="2" stroke-linejoin="round" marker-end="url(#arr)"/>
+<rect x="432" y="512" width="308" height="142" rx="12" fill="white" stroke="#B7C7DE" stroke-width="2"/>
+<text x="448" y="549" font-family="Noto Sans CJK SC, sans-serif" font-size="24" fill="#073B8D" font-weight="700" text-anchor="start">结构化假设</text>
+<text x="448" y="589" font-family="Noto Sans CJK SC, sans-serif" font-size="19" fill="#18283F" font-weight="400" text-anchor="start">hypothesis / confidence</text>
+<text x="448" y="620" font-family="Noto Sans CJK SC, sans-serif" font-size="19" fill="#18283F" font-weight="400" text-anchor="start">citations / LLM 使用记录</text>
+<path d="M586,654 L586,675" fill="none" stroke="#073B8D" stroke-width="2" stroke-linejoin="round" marker-end="url(#arr)"/>
+<rect x="432" y="681" width="308" height="142" rx="12" fill="#EAF0FA" stroke="#B7C7DE" stroke-width="2"/>
+<text x="448" y="718" font-family="Noto Sans CJK SC, sans-serif" font-size="24" fill="#073B8D" font-weight="700" text-anchor="start">故障回退可见</text>
+<text x="448" y="758" font-family="Noto Sans CJK SC, sans-serif" font-size="19" fill="#18283F" font-weight="400" text-anchor="start">无 Key / 无效响应 / 超时</text>
+<text x="448" y="789" font-family="Noto Sans CJK SC, sans-serif" font-size="19" fill="#18283F" font-weight="400" text-anchor="start">转规则分析并记录状态</text>
+<rect x="414" y="893" width="344" height="101" rx="12" fill="#FFF2E6" stroke="#073B8D" stroke-width="2"/>
+<text x="586.0" y="939.5" font-family="Noto Sans CJK SC, sans-serif" font-size="22" fill="#18283F" font-weight="700" text-anchor="middle">阶段产物</text>
+<text x="586.0" y="971.5" font-family="Noto Sans CJK SC, sans-serif" font-size="19" fill="#617087" font-weight="400" text-anchor="middle">hypotheses.json</text>
+<path d="M760,595 L786,595" fill="none" stroke="#073B8D" stroke-width="3" stroke-linejoin="round" marker-end="url(#arr)"/>
+<rect x="788" y="190" width="344" height="112" rx="12" fill="#073B8D" stroke="none" stroke-width="2"/>
+<text x="810" y="226" font-family="Noto Sans CJK SC, sans-serif" font-size="21" fill="#C6D8F5" font-weight="700" text-anchor="start">03</text>
+<text x="960" y="248" font-family="Noto Sans CJK SC, sans-serif" font-size="32" fill="white" font-weight="700" text-anchor="middle">种子与 Fuzz</text>
+<text x="960" y="281" font-family="Noto Sans CJK SC, sans-serif" font-size="20" fill="white" font-weight="400" text-anchor="middle">D2：假设指导测试</text>
+<rect x="788" y="320" width="344" height="552" rx="12" fill="white" stroke="#365AA2" stroke-width="2"/>
+<rect x="806" y="343" width="308" height="142" rx="12" fill="#EAF0FA" stroke="#B7C7DE" stroke-width="2"/>
+<text x="822" y="380" font-family="Noto Sans CJK SC, sans-serif" font-size="24" fill="#073B8D" font-weight="700" text-anchor="start">假设驱动规则种子</text>
+<text x="822" y="420" font-family="Noto Sans CJK SC, sans-serif" font-size="19" fill="#18283F" font-weight="400" text-anchor="start">关键词 / 数值 / 字符串线索</text>
+<text x="822" y="451" font-family="Noto Sans CJK SC, sans-serif" font-size="19" fill="#18283F" font-weight="400" text-anchor="start">JSON / PNG / TIFF 模板</text>
+<path d="M960,485 L960,506" fill="none" stroke="#073B8D" stroke-width="2" stroke-linejoin="round" marker-end="url(#arr)"/>
+<rect x="806" y="512" width="308" height="142" rx="12" fill="white" stroke="#B7C7DE" stroke-width="2"/>
+<text x="822" y="549" font-family="Noto Sans CJK SC, sans-serif" font-size="24" fill="#073B8D" font-weight="700" text-anchor="start">构建与并行变异</text>
+<text x="822" y="589" font-family="Noto Sans CJK SC, sans-serif" font-size="19" fill="#18283F" font-weight="400" text-anchor="start">自建 API harness / ASAN</text>
+<text x="822" y="620" font-family="Noto Sans CJK SC, sans-serif" font-size="19" fill="#18283F" font-weight="400" text-anchor="start">trace-pc / trace-cmp / 字典</text>
+<path d="M960,654 L960,675" fill="none" stroke="#073B8D" stroke-width="2" stroke-linejoin="round" marker-end="url(#arr)"/>
+<rect x="806" y="681" width="308" height="142" rx="12" fill="#EAF0FA" stroke="#B7C7DE" stroke-width="2"/>
+<text x="822" y="718" font-family="Noto Sans CJK SC, sans-serif" font-size="24" fill="#073B8D" font-weight="700" text-anchor="start">覆盖反馈与执行隔离</text>
+<text x="822" y="758" font-family="Noto Sans CJK SC, sans-serif" font-size="19" fill="#18283F" font-weight="400" text-anchor="start">新覆盖入语料 / 记录崩溃</text>
+<text x="822" y="789" font-family="Noto Sans CJK SC, sans-serif" font-size="19" fill="#18283F" font-weight="400" text-anchor="start">bwrap / unshare / 资源限制</text>
+<rect x="788" y="893" width="344" height="101" rx="12" fill="#FFF2E6" stroke="#073B8D" stroke-width="2"/>
+<text x="960.0" y="939.5" font-family="Noto Sans CJK SC, sans-serif" font-size="22" fill="#18283F" font-weight="700" text-anchor="middle">阶段产物</text>
+<text x="960.0" y="971.5" font-family="Noto Sans CJK SC, sans-serif" font-size="19" fill="#617087" font-weight="400" text-anchor="middle">corpus/ · crashes/ · stats/</text>
+<path d="M1134,595 L1160,595" fill="none" stroke="#073B8D" stroke-width="3" stroke-linejoin="round" marker-end="url(#arr)"/>
+<rect x="1162" y="190" width="344" height="112" rx="12" fill="#365AA2" stroke="none" stroke-width="2"/>
+<text x="1184" y="226" font-family="Noto Sans CJK SC, sans-serif" font-size="21" fill="#C6D8F5" font-weight="700" text-anchor="start">04</text>
+<text x="1334" y="248" font-family="Noto Sans CJK SC, sans-serif" font-size="32" fill="white" font-weight="700" text-anchor="middle">分诊与复核</text>
+<text x="1334" y="281" font-family="Noto Sans CJK SC, sans-serif" font-size="20" fill="white" font-weight="400" text-anchor="middle">D3 / D3.5：证据约束</text>
+<rect x="1162" y="320" width="344" height="552" rx="12" fill="white" stroke="#365AA2" stroke-width="2"/>
+<rect x="1180" y="343" width="308" height="142" rx="12" fill="#EAF0FA" stroke="#B7C7DE" stroke-width="2"/>
+<text x="1196" y="380" font-family="Noto Sans CJK SC, sans-serif" font-size="24" fill="#073B8D" font-weight="700" text-anchor="start">诊断解析与去重</text>
+<text x="1196" y="420" font-family="Noto Sans CJK SC, sans-serif" font-size="19" fill="#18283F" font-weight="400" text-anchor="start">类型 / 读写 / 根因栈帧</text>
+<text x="1196" y="451" font-family="Noto Sans CJK SC, sans-serif" font-size="19" fill="#18283F" font-weight="400" text-anchor="start">栈签名归并候选崩溃</text>
+<path d="M1334,485 L1334,506" fill="none" stroke="#073B8D" stroke-width="2" stroke-linejoin="round" marker-end="url(#arr)"/>
+<rect x="1180" y="512" width="308" height="142" rx="12" fill="white" stroke="#B7C7DE" stroke-width="2"/>
+<text x="1196" y="549" font-family="Noto Sans CJK SC, sans-serif" font-size="24" fill="#073B8D" font-weight="700" text-anchor="start">干净重建与重放</text>
+<text x="1196" y="589" font-family="Noto Sans CJK SC, sans-serif" font-size="19" fill="#18283F" font-weight="400" text-anchor="start">同输入重放 3 次</text>
+<text x="1196" y="620" font-family="Noto Sans CJK SC, sans-serif" font-size="19" fill="#18283F" font-weight="400" text-anchor="start">无有效诊断不得升级确认</text>
+<path d="M1334,654 L1334,675" fill="none" stroke="#073B8D" stroke-width="2" stroke-linejoin="round" marker-end="url(#arr)"/>
+<rect x="1180" y="681" width="308" height="142" rx="12" fill="#EAF0FA" stroke="#B7C7DE" stroke-width="2"/>
+<text x="1196" y="718" font-family="Noto Sans CJK SC, sans-serif" font-size="24" fill="#073B8D" font-weight="700" text-anchor="start">规则 / 可选 LLM 复核</text>
+<text x="1196" y="758" font-family="Noto Sans CJK SC, sans-serif" font-size="19" fill="#18283F" font-weight="400" text-anchor="start">四类结论 + 理由</text>
+<text x="1196" y="789" font-family="Noto Sans CJK SC, sans-serif" font-size="19" fill="#18283F" font-weight="400" text-anchor="start">模型结论不得超过规则上限</text>
+<rect x="1162" y="893" width="344" height="101" rx="12" fill="#FFF2E6" stroke="#073B8D" stroke-width="2"/>
+<text x="1334.0" y="939.5" font-family="Noto Sans CJK SC, sans-serif" font-size="22" fill="#18283F" font-weight="700" text-anchor="middle">阶段产物</text>
+<text x="1334.0" y="971.5" font-family="Noto Sans CJK SC, sans-serif" font-size="19" fill="#617087" font-weight="400" text-anchor="middle">triage.json / reviews.json</text>
+<path d="M1508,595 L1534,595" fill="none" stroke="#073B8D" stroke-width="3" stroke-linejoin="round" marker-end="url(#arr)"/>
+<rect x="1536" y="190" width="344" height="112" rx="12" fill="#073B8D" stroke="none" stroke-width="2"/>
+<text x="1558" y="226" font-family="Noto Sans CJK SC, sans-serif" font-size="21" fill="#C6D8F5" font-weight="700" text-anchor="start">05</text>
+<text x="1708" y="248" font-family="Noto Sans CJK SC, sans-serif" font-size="32" fill="white" font-weight="700" text-anchor="middle">报告与评估</text>
+<text x="1708" y="281" font-family="Noto Sans CJK SC, sans-serif" font-size="20" fill="white" font-weight="400" text-anchor="middle">D4 / D5：结果可审计</text>
+<rect x="1536" y="320" width="344" height="552" rx="12" fill="white" stroke="#365AA2" stroke-width="2"/>
+<rect x="1554" y="343" width="308" height="142" rx="12" fill="#EAF0FA" stroke="#B7C7DE" stroke-width="2"/>
+<text x="1570" y="380" font-family="Noto Sans CJK SC, sans-serif" font-size="24" fill="#073B8D" font-weight="700" text-anchor="start">报告与证据落盘</text>
+<text x="1570" y="420" font-family="Noto Sans CJK SC, sans-serif" font-size="19" fill="#18283F" font-weight="400" text-anchor="start">完整性 / 覆盖 / 发现条目</text>
+<text x="1570" y="451" font-family="Noto Sans CJK SC, sans-serif" font-size="19" fill="#18283F" font-weight="400" text-anchor="start">JSON + Markdown + SQLite</text>
+<path d="M1708,485 L1708,506" fill="none" stroke="#073B8D" stroke-width="2" stroke-linejoin="round" marker-end="url(#arr)"/>
+<rect x="1554" y="512" width="308" height="142" rx="12" fill="white" stroke="#B7C7DE" stroke-width="2"/>
+<text x="1570" y="549" font-family="Noto Sans CJK SC, sans-serif" font-size="24" fill="#073B8D" font-weight="700" text-anchor="start">效果对照</text>
+<text x="1570" y="589" font-family="Noto Sans CJK SC, sans-serif" font-size="19" fill="#18283F" font-weight="400" text-anchor="start">ranked vs random</text>
+<text x="1570" y="620" font-family="Noto Sans CJK SC, sans-serif" font-size="19" fill="#18283F" font-weight="400" text-anchor="start">假设驱动种子 vs 基础种子</text>
+<path d="M1708,654 L1708,675" fill="none" stroke="#073B8D" stroke-width="2" stroke-linejoin="round" marker-end="url(#arr)"/>
+<rect x="1554" y="681" width="308" height="142" rx="12" fill="#EAF0FA" stroke="#B7C7DE" stroke-width="2"/>
+<text x="1570" y="718" font-family="Noto Sans CJK SC, sans-serif" font-size="24" fill="#073B8D" font-weight="700" text-anchor="start">诚实表达能力边界</text>
+<text x="1570" y="758" font-family="Noto Sans CJK SC, sans-serif" font-size="19" fill="#18283F" font-weight="400" text-anchor="start">受控 fixture 与真实目标分开</text>
+<text x="1570" y="789" font-family="Noto Sans CJK SC, sans-serif" font-size="19" fill="#18283F" font-weight="400" text-anchor="start">保留 0 崩溃 / 不夸大高危</text>
+<rect x="1536" y="893" width="344" height="101" rx="12" fill="#FFF2E6" stroke="#073B8D" stroke-width="2"/>
+<text x="1708.0" y="939.5" font-family="Noto Sans CJK SC, sans-serif" font-size="22" fill="#18283F" font-weight="700" text-anchor="middle">阶段产物</text>
+<text x="1708.0" y="971.5" font-family="Noto Sans CJK SC, sans-serif" font-size="19" fill="#617087" font-weight="400" text-anchor="middle">report.json / MD / 对照结果</text></svg>

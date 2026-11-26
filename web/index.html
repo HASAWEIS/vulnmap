@@ -1,0 +1,388 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>vulnmap · 漏洞挖掘智能体</title>
+<style>
+:root{
+  --bg:#0d1117; --panel:#161b22; --panel2:#1c2129; --line:#30363d;
+  --fg:#e6edf3; --dim:#8b949e; --dim2:#6e7681;
+  --ok:#3fb950; --warn:#d29922; --bad:#f85149; --info:#58a6ff; --purple:#bc8cff;
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);
+  font:14px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans SC",sans-serif;}
+a{color:var(--info);text-decoration:none}
+a:hover{text-decoration:underline}
+.wrap{max-width:1280px;margin:0 auto;padding:24px}
+
+header{border-bottom:1px solid var(--line);padding-bottom:18px;margin-bottom:24px}
+h1{margin:0 0 6px;font-size:24px;font-weight:600;letter-spacing:-.3px}
+h1 .dot{color:var(--ok)}
+.sub{color:var(--dim);font-size:13px}
+.sub code{background:var(--panel2);padding:1px 6px;border-radius:4px;font-family:var(--mono);font-size:12px}
+
+/* 顶部状态条 */
+.banner{display:flex;gap:14px;flex-wrap:wrap;margin:18px 0 0}
+.kpi{flex:1 1 150px;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:14px 16px}
+.kpi .n{font-size:26px;font-weight:600;font-family:var(--mono);line-height:1.2}
+.kpi .l{color:var(--dim);font-size:12px;margin-top:2px}
+.kpi.hi .n{color:var(--ok)} .kpi.warn .n{color:var(--warn)}
+.kpi.bad .n{color:var(--bad)} .kpi.info .n{color:var(--info)}
+
+/* 分层说明 */
+.layers{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:10px;margin:20px 0 28px}
+.layer{background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--dim2);
+  border-radius:6px;padding:12px 14px}
+.layer b{display:block;font-size:13px;margin-bottom:2px}
+.layer span{color:var(--dim);font-size:12px}
+
+section{margin:32px 0}
+h2{font-size:15px;font-weight:600;margin:0 0 4px;display:flex;align-items:center;gap:8px}
+h2 .tag{font:11px var(--mono);color:var(--dim);background:var(--panel2);
+  padding:1px 7px;border-radius:10px;border:1px solid var(--line)}
+.hint{color:var(--dim);font-size:12.5px;margin:0 0 14px}
+
+/* 案例表 */
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;color:var(--dim);font-weight:500;font-size:12px;
+  padding:8px 10px;border-bottom:1px solid var(--line);white-space:nowrap}
+td{padding:10px;border-bottom:1px solid var(--line);vertical-align:top}
+tr.case{cursor:pointer}
+tr.case:hover{background:var(--panel)}
+tr.case.open{background:var(--panel2)}
+.mono{font-family:var(--mono);font-size:12px}
+.badge{display:inline-block;font:11px var(--mono);padding:1px 7px;border-radius:10px;
+  border:1px solid;white-space:nowrap}
+.b-ok{color:var(--ok);border-color:#238636;background:#0d2818}
+.b-warn{color:var(--warn);border-color:#6b5417;background:#2b2110}
+.b-bad{color:var(--bad);border-color:#7d2b28;background:#2d1112}
+.b-dim{color:var(--dim);border-color:var(--line);background:var(--panel2)}
+.b-info{color:var(--info);border-color:#1f4b7a;background:#0d1f33}
+.b-purple{color:var(--purple);border-color:#553098;background:#1c1330}
+
+/* 展开详情 */
+.detail{background:var(--panel2);border:1px solid var(--line);border-radius:8px;
+  margin:8px 0 16px;padding:16px}
+.detail h4{margin:0 0 10px;font-size:13px;color:var(--fg)}
+.track{display:flex;gap:0;margin:12px 0 16px;flex-wrap:wrap}
+.step{flex:1 1 120px;position:relative;padding:0 6px}
+.step .bar{height:3px;background:var(--line);border-radius:2px}
+.step.done .bar{background:var(--ok)}
+.step.fail .bar{background:var(--bad)}
+.step.pend .bar{background:var(--warn)}
+.step .nm{font-size:11.5px;margin-top:6px;color:var(--dim)}
+.step.done .nm{color:var(--fg)}
+.step .ic{font-size:11px;margin-top:1px}
+
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+@media(max-width:760px){.grid2{grid-template-columns:1fr}}
+.kv{font-size:12.5px}
+.kv div{display:flex;gap:8px;padding:3px 0;border-bottom:1px dashed #21262d}
+.kv .k{color:var(--dim);min-width:96px;flex-shrink:0}
+.kv .v{font-family:var(--mono);word-break:break-all}
+ul.plain{margin:6px 0 0;padding-left:18px;font-size:12.5px;color:var(--dim)}
+ul.plain li{margin:2px 0}
+.note{background:#1c2129;border-left:2px solid var(--purple);padding:8px 12px;
+  border-radius:4px;font-size:12.5px;color:var(--dim);margin:10px 0}
+
+/* 交付包 */
+.packs{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px}
+.pack{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:14px}
+.pack .nm{font-family:var(--mono);font-size:13px;margin-bottom:8px}
+.pack .files{font-size:11.5px;color:var(--dim2);font-family:var(--mono);
+  margin-top:8px;line-height:1.7}
+
+/* 实验 */
+.exps{display:flex;flex-direction:column;gap:6px}
+.exp{background:var(--panel);border:1px solid var(--line);border-radius:6px;
+  padding:10px 14px;font-size:12.5px;display:flex;gap:12px;align-items:baseline}
+.exp .d{font-family:var(--mono);color:var(--info);min-width:260px;flex-shrink:0}
+.exp .s{color:var(--dim)}
+
+/* AB 对比 */
+.ab-row{display:grid;grid-template-columns:1fr 44px 1fr;gap:10px;align-items:center;
+  padding:8px 0;border-bottom:1px solid var(--line)}
+.ab-side{font-size:12.5px}
+
+footer{margin-top:48px;padding-top:18px;border-top:1px solid var(--line);
+  color:var(--dim2);font-size:12px}
+.loading{color:var(--dim);padding:40px;text-align:center}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>vulnmap <span class="dot">·</span> 漏洞挖掘智能体</h1>
+    <div class="sub" id="sub">加载中…</div>
+  </header>
+
+  <div class="banner" id="kpis"></div>
+
+  <div class="layers">
+    <div class="layer" style="border-left-color:var(--info)">
+      <b>本地双端通过</b><span>vul 崩溃 且 fix 干净</span></div>
+    <div class="layer" style="border-left-color:var(--purple)">
+      <b>因果链闭合</b><span>输入→汇聚点→缺失检查证据齐备</span></div>
+    <div class="layer" style="border-left-color:var(--warn)">
+      <b>高危且属目标缺陷</b><span>严重性已论证，排除 harness UB</span></div>
+    <div class="layer" style="border-left-color:var(--ok)">
+      <b>课程可交付</b><span>另需人工复核签字 + 官方回执</span></div>
+  </div>
+
+  <section>
+    <h2>案例总览 <span class="tag" id="caseCount"></span></h2>
+    <p class="hint">点击任意行展开验收明细。四层门禁依次为：双端 → 因果链 → 高危 → 可交付。</p>
+    <table>
+      <thead><tr>
+        <th>案例</th><th>任务</th><th>项目</th><th>CWE</th>
+        <th>双端</th><th>因果链</th><th>高危</th><th>交付</th><th>模型</th>
+      </tr></thead>
+      <tbody id="cases"></tbody>
+    </table>
+  </section>
+
+  <section>
+    <h2>交付证据包 <span class="tag" id="packCount"></span></h2>
+    <p class="hint">每个包含 PoC、验收状态、复现步骤与材料哈希清单，可独立复核。</p>
+    <div class="packs" id="packs"></div>
+  </section>
+
+  <section id="abSection" style="display:none">
+    <h2>对照实验 <span class="tag">规则基线 vs 规则+模型</span></h2>
+    <p class="hint">同一任务、同一流水线，唯一变量是模型是否参与。</p>
+    <div id="ab"></div>
+  </section>
+
+  <section>
+    <h2>实验记录 <span class="tag" id="expCount"></span></h2>
+    <p class="hint">`experiments/` 下的结构化记录，含成功、失败与自我修正。</p>
+    <div class="exps" id="exps"></div>
+  </section>
+
+  <footer>
+    数据源：<code>experiments/LEDGER.json</code> + <code>workspace/*/artifacts/report/case.json</code><br>
+    重新生成：<code>python3 experiments/build_dashboard.py</code> ·
+    本页为静态展示，不含后端服务
+  </footer>
+</div>
+
+<script>
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c =>
+  ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+function badge(text, cls){ return `<span class="badge ${cls}">${esc(text)}</span>`; }
+
+function yn(v, okText, noText){
+  return v ? badge(okText || "是", "b-ok") : badge(noText || "否", "b-dim");
+}
+
+function stageBadge(s){
+  const map = {
+    "causal_chain_verified": ["因果链闭合", "b-purple"],
+    "local_verified_pending_evidence": ["待补证据", "b-warn"],
+    "not_verified": ["未验证", "b-dim"],
+    "withdrawn": ["已撤回", "b-bad"],
+  };
+  const m = map[s] || [s || "未开始", "b-dim"];
+  return badge(m[0], m[1]);
+}
+
+function renderKpis(t, tests){
+  const items = [
+    {n:t.cases, l:"案例总数", c:""},
+    {n:t.local_dual_run_pass, l:"本地双端通过", c:"info"},
+    {n:t.causal_chain_verified, l:"因果链闭合", c:"warn"},
+    {n:t.high_severity_confirmed, l:"高危且属目标缺陷", c:"bad"},
+    {n:t.course_ready, l:"课程可交付", c:"hi"},
+    {n:tests, l:"自动化测试", c:""},
+  ];
+  document.getElementById("kpis").innerHTML = items.map(i =>
+    `<div class="kpi ${i.c}"><div class="n">${esc(i.n)}</div>
+     <div class="l">${esc(i.l)}</div></div>`).join("");
+}
+
+function stepRow(stages, acc){
+  const steps = [
+    ["recon","侦察","done"],
+    ["locate","定位","done"],
+    ["verify","验证", stages.local_dual_run.ok ? "done" : "fail"],
+    ["exploit","利用", "pend"],
+    ["report","报告","done"],
+  ];
+  return steps.map(([k,label,state]) => {
+    const ic = state==="done" ? "✓" : state==="fail" ? "✕" : "–";
+    return `<div class="step ${state}"><div class="bar"></div>
+      <div class="nm">${esc(label)}</div><div class="ic">${ic}</div></div>`;
+  }).join("");
+}
+
+function detailHtml(c){
+  const d = c.detail || {};
+  const a = d.acceptance || {};
+  const st = d.stages || {};
+  const p = st.propagation || {};
+  const m = d.model || {};
+  const els = p.elements || {};
+  const elHtml = Object.entries(els).map(([k,v]) =>
+    `<div><span class="k">${esc(k)}</span><span class="v">${v
+      ? badge("已具备","b-ok") : badge("缺失","b-bad")}</span></div>`).join("");
+
+  const blockers = (a.blockers||[]).map(b => `<li>${esc(b)}</li>`).join("");
+
+  return `<tr><td colspan="9"><div class="detail">
+    <div class="track">${stepRow(st, a)}</div>
+    <div class="grid2">
+      <div>
+        <h4>验收状态</h4>
+        <div class="kv">
+          <div><span class="k">缺陷类别</span><span class="v">${
+            a.defect_class==="harness_ub"
+              ? badge("harness UB","b-bad") : badge(a.defect_class||"-","b-info")}</span></div>
+          <div><span class="k">双端</span><span class="v">vul ${
+            esc(d.vul_exit ?? "—")} / fix ${esc(d.fix_exit ?? "—")}</span></div>
+          <div><span class="k">根因</span><span class="v">${
+            esc((st.root_cause||{}).confidence || "—")} · ${
+            esc((st.root_cause||{}).reason || "")}</span></div>
+          <div><span class="k">严重性</span><span class="v">${
+            a.severity_assessed ? badge("已论证","b-ok") : badge("未论证","b-warn")}</span></div>
+          <div><span class="k">人工复核</span><span class="v">${
+            yn(a.human_reviewed)}</span></div>
+          <div><span class="k">官方回执</span><span class="v">${
+            yn(a.official_receipt)}</span></div>
+        </div>
+        ${blockers ? `<h4 style="margin-top:14px">未达可交付的原因</h4>
+          <ul class="plain">${blockers}</ul>` : ""}
+      </div>
+      <div>
+        <h4>因果链要素 <span class="tag">${esc(p.kind||"")}</span></h4>
+        <div class="kv">${elHtml || "<div><span class='v'>—</span></div>"}</div>
+        <h4 style="margin-top:14px">模型参与</h4>
+        <div class="kv">
+          <div><span class="k">调用次数</span><span class="v">${esc(m.llm_calls ?? 0)}</span></div>
+          <div><span class="k">结论来源</span><span class="v">${esc(m.final_subject_from || "rule")}</span></div>
+          <div><span class="k">定位贡献</span><span class="v">${
+            yn(m.verified_pinpoint,"已验证")}</span></div>
+          <div><span class="k">生成贡献</span><span class="v">${
+            yn(m.verified_generation,"已验证")}</span></div>
+        </div>
+        ${m.coincidence_note ? `<div class="note">${esc(m.coincidence_note)}</div>` : ""}
+        ${(m.llm_rejected||[]).length ? `<div class="note">模型提议被拒：<code>${
+          esc(m.llm_rejected.join(", "))}</code></div>` : ""}
+      </div>
+    </div>
+    <div class="kv" style="margin-top:14px">
+      <div><span class="k">sink</span><span class="v">${esc((d.sink||{}).file||"—")}${
+        (d.sink||{}).line ? ":" + esc(d.sink.line) : ""}</span></div>
+      <div><span class="k">PoC</span><span class="v">${esc((d.poc||{}).size ?? "—")} B · sha ${
+        esc(((d.poc||{}).sha256||"—").slice(0,16))}</span></div>
+    </div>
+  </div></td></tr>`;
+}
+
+function renderCases(data){
+  const tb = document.getElementById("cases");
+  const rows = data.cases.map((c,i) => {
+    const d = c.detail || {};
+    const l = c.ledger || {};
+    const a = d.acceptance || {};
+    const modelCell = (a.course_ready ? "" : "") +
+      ((d.model||{}).verified_pinpoint || (d.model||{}).verified_generation
+        ? badge("已验证贡献","b-purple") : badge("无","b-dim"));
+    const id = `case-${i}`;
+    return `<tr class="case" data-target="${id}">
+      <td class="mono">${esc(d.case_id || l.case_id || l.case_dir)}</td>
+      <td class="mono">${esc(d.task_id || l.task_id || "—")}</td>
+      <td>${esc(d.project || "—")}</td>
+      <td class="mono">${esc(d.cwe || "—")}</td>
+      <td>${a.local_verified ? badge("通过","b-ok") : badge("未过","b-dim")}</td>
+      <td>${a.causal_chain_verified ? badge("闭合","b-purple") : badge("未闭合","b-dim")}</td>
+      <td>${a.high_severity_confirmed ? badge("是","b-bad") : badge("否","b-dim")}</td>
+      <td>${a.course_ready ? badge("可交付","b-ok") : badge("未达","b-dim")}</td>
+      <td>${modelCell}</td>
+    </tr>
+    <tr id="${id}" style="display:none">${detailHtml(c).replace(/^<tr>|<\/tr>$/g,"")}</tr>`;
+  }).join("");
+  tb.innerHTML = rows;
+  document.getElementById("caseCount").textContent = `${data.cases.length} 条记录`;
+
+  tb.querySelectorAll("tr.case").forEach(tr => {
+    tr.addEventListener("click", () => {
+      const t = document.getElementById(tr.dataset.target);
+      const open = t.style.display !== "none";
+      t.style.display = open ? "none" : "";
+      tr.classList.toggle("open", !open);
+    });
+  });
+}
+
+function renderPacks(data){
+  const el = document.getElementById("packs");
+  document.getElementById("packCount").textContent = `${data.packages.length} 个包`;
+  el.innerHTML = data.packages.map(p => {
+    const sev = p.severity === "reviewed"
+      ? badge("严重性已评审","b-ok")
+      : p.severity === "draft_only" ? badge("仅草案","b-warn")
+      : badge("无","b-dim");
+    return `<div class="pack">
+      <div class="nm">${esc(p.case)}</div>
+      <div>${stageBadge(p.stage)} ${sev}</div>
+      <div class="files">${(p.files_detail||[]).map(f =>
+        `${esc(f.name)}<br>`).join("")}</div>
+      <div style="margin-top:8px;color:var(--dim2);font-size:11.5px">
+        ${esc(p.files)} 个文件 · 哈希清单可校验</div>
+    </div>`;
+  }).join("");
+}
+
+function renderAB(data){
+  if(!data.ab || !data.ab.rows || !data.ab.rows.length) return;
+  document.getElementById("abSection").style.display = "";
+  document.getElementById("ab").innerHTML = data.ab.rows.map(r => {
+    const b = r.baseline||{}, a = r.augmented||{};
+    const changed = b.stage !== a.stage;
+    return `<div class="ab-row">
+      <div class="ab-side" style="text-align:right">
+        <div class="mono">${esc(r.case)}</div>
+        <div>${stageBadge(b.stage)}</div>
+      </div>
+      <div style="text-align:center;color:${changed?"var(--ok)":"var(--dim2)"};
+        font-size:18px">${changed?"→":"="}</div>
+      <div class="ab-side">
+        <div>${stageBadge(a.stage)}</div>
+        <div style="color:var(--dim);font-size:11.5px;margin-top:2px">
+          模型定位 ${a.verified_pinpoint?"✓":"✗"} · 生成 ${a.verified_generation?"✓":"✗"}</div>
+      </div>
+    </div>`;
+  }).join("");
+}
+
+function renderExps(data){
+  const el = document.getElementById("exps");
+  document.getElementById("expCount").textContent = `${data.experiments.length} 条`;
+  el.innerHTML = data.experiments.map(e =>
+    `<div class="exp"><span class="d">${esc(e.dir)}</span>
+     <span class="s">${esc(String(e.summary).slice(0,140))}</span></div>`).join("");
+}
+
+fetch("data.json").then(r => r.json()).then(data => {
+  const t = data.totals || {};
+  document.getElementById("sub").innerHTML =
+    `五阶段流水线 · ${esc(t.cases)} 个案例 · ${esc(data.tests)} 项测试 · ` +
+    `数据生成于 <code>experiments/LEDGER.json</code>`;
+  renderKpis(t, data.tests);
+  renderCases(data);
+  renderPacks(data);
+  renderAB(data);
+  renderExps(data);
+}).catch(err => {
+  document.getElementById("sub").innerHTML =
+    `无法加载 data.json：${esc(err.message)}<br>` +
+    `请先运行 <code>python3 experiments/build_dashboard.py</code>，` +
+    `并通过 HTTP 访问（file:// 会被浏览器拦截 fetch）。`;
+});
+</script>
+</body>
+</html>

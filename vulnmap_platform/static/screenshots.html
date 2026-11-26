@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8">
+<title>界面预览 · vulnmap</title><link rel="stylesheet" href="style.css"></head>
+<body><header id="topbar"></header>
+<main class="page">
+  <div class="page-head"><h1>界面预览</h1>
+    <p>各页面截图（1440px 视口）</p></div>
+  <div id="root" class="loading">加载中…</div>
+</main>
+<script src="app.js"></script>
+<script>
+renderTopbar("");
+const SHOTS = [
+  ["overview.png","总览页","KPI、验收漏斗、案例一览"],
+  ["cases.png","案例列表","四层门禁逐行展示，可按状态筛选"],
+  ["case-detail.png","案例详情","点击行展开：阶段条、验收状态、因果链、模型参与"],
+  ["packages.png","交付包","每个包的材料清单与哈希"],
+  ["lab.png","实验记录","对照实验与全部实验时间线"],
+];
+$("#root").className = "";
+$("#root").innerHTML = SHOTS.map(([f,t,d]) => `
+  <div class="card card-pad" style="margin-bottom:22px">
+    <h3 style="margin:0 0 4px;font-size:15px">${esc(t)}</h3>
+    <p style="margin:0 0 12px;color:var(--fg-3);font-size:12.5px">${esc(d)}</p>
+    <img src="/shots/${f}?v=1" alt="${esc(t)}"
+         style="width:100%;border:1px solid var(--line);border-radius:8px">
+  </div>`).join("");
+</script></body></html>

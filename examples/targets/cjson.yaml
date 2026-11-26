@@ -1,0 +1,15 @@
+# P4 示例：cJSON 1.7.10（源码在 /tmp/cJSON）
+name: cJSON-1.7.10
+root: /tmp/cJSON
+format: json
+sources:
+  - cJSON.c
+includes:
+  - .
+build:
+  mode: api
+  harness: cjson
+fuzz:
+  seconds: 60
+  workers: 4
+  timeout: 2.0
