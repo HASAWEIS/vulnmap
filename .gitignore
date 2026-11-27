@@ -36,3 +36,6 @@ node_modules/
 .DS_Store
 .idea/
 .vscode/
+
+# 由 vulnmap_platform/static/_server/**/draw_*.py 生成的图表，不随仓库分发
+vulnmap_platform/static/assets/*.svg
