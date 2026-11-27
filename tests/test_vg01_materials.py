@@ -12,7 +12,7 @@ from pathlib import Path
 import pytest
 
 # 文档范围外新增的案例（各自有独立材料页），不计入这三份 9 例快照
-POST_SCOPE = {"AR6"}
+POST_SCOPE = {"AR6", "AR7"}
 
 ROOT = Path(__file__).resolve().parent.parent
 WS = ROOT / "workspace"

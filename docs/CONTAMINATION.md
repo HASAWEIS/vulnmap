@@ -16,17 +16,17 @@
 
 | 指标 | 数值 |
 |---|---|
-| 案例总数 | 16 |
+| 案例总数 | 17 |
 | 构造器模板来自官方 PoC | **官方 PoC 模板 3 例** |
 | 进入开发集 | 8 |
-| 干净（无污染且未进开发集） | **干净 8 例** |
-| 冻结进正式集 EVAL_SET | **8 例**（可跑 7 例） |
+| 干净（无污染且未进开发集） | **干净 9 例** |
+| 冻结进正式集 EVAL_SET | **9 例**（可跑 8 例） |
 | 其中标 dirty（冻结后被开发使用／答案回灌） | **6 例** |
-| 盲测可用（不在开发集、无 dev_history 阻断） | **盲测可用 1 例** |
+| 盲测可用（不在开发集、无 dev_history 阻断） | **盲测可用 2 例** |
 | 模型经验证贡献 | 1 |
 
 **官方 PoC 模板 3 例**：CG-13 / CG-14 / CG-15 —— 构造器输入与官方 PoC 字节完全相同，只能作为开发样本或复现基线，不得进入正式集。
-**干净 8 例**：AR6、CG-02、CG-04、CG-08、CG-09、CG-12、EG-01、EG-02 —— 无 PoC 模板污染且未进开发集。
+**干净 9 例**：AR6、AR7、CG-02、CG-04、CG-08、CG-09、CG-12、EG-01、EG-02 —— 无 PoC 模板污染且未进开发集。
 
 > 口径提醒：上面的「干净」= **无答案污染且未进开发集**，只回答「答案有没有漏进去」，**不等于**「现在还能盲测」。冻结之后的开发使用记录见后文 dev_history 一节——那些记录不改首跑成绩，但会取走盲测资格。
 
@@ -35,6 +35,7 @@
 | 案例 | task_id | 构造器/模板来源 | 含答案污染 | 开发集 | 干净 | 正式集 |
 |---|---|---|---|---|---|---|
 | AR6 | `arvo:42470179` | 无模板；仅任务自带 description/error 与 Agent 自建输入 | 无 | 否 | 是 | **是（冻结）** |
+| AR7 | `arvo:42485152` | 无模板；仅任务自带 description/error 与 Agent 自建输入 | 无 | 否 | 是 | **是（冻结）** |
 | CG-01 | `arvo:44034` | 无模板；仅任务自带 description/error 与 Agent 自建输入 | 无 | 是 | 否 | 否 |
 | CG-02 | `arvo:47101` | 无模板；仅任务自带 description/error 与 Agent 自建输入 | 无 | 否 | 是 | **是（冻结）** |
 | CG-04 | `arvo:10400` | 无模板；仅任务自带 description/error 与 Agent 自建输入 | 无 | 否 | 是 | **是（冻结）** |
@@ -58,6 +59,7 @@
 | 案例 | task_id | 允许输入 | sealed_paths | repo_sha256 | image_digest | 盲测可用 |
 |---|---|---|---|---|---|---|
 | AR6 | `arvo:42470179` | — | — | null（unresolved） | sha256:ce1a81723504… | 是 |
+| AR7 | `arvo:42485152` | — | — | null（unresolved） | sha256:d7539b321725… | 是 |
 | CG-02 | `arvo:47101` | description.txt、error.txt | — | 8b7735349651dcfb… | null（unresolved） | **否（dirty）** |
 | CG-04 | `arvo:10400` | description.txt、error.txt | — | 94f56b7037a4c097… | null（unresolved） | **否（dirty）** |
 | CG-08 | `arvo:10147` | description.txt | experiments/sealed-10147 | 5601d32b26e6e455… | null（unresolved） | **否（dirty）** |
@@ -73,6 +75,7 @@
 | 案例 | dirty | 盲测可用 | 用途（重跑／构造器复跑／答案回灌） | 证据 |
 |---|---|---|---|---|
 | AR6 | 否 | 是 | 无 dev_history（未见冻结后使用记录） | — |
+| AR7 | 否 | 是 | 无 dev_history（未见冻结后使用记录） | — |
 | CG-02 | **是** | 否 | A/B 门禁实验对照样本（同流水线，唯一变量 LLM 开/关）（post_freeze／重跑／影响盲测） | experiments/ab/EXPERIMENT.json — 47101 上模型把 sink 从 690 指到 693，暴露 LINE_SLACK 门禁漏洞并已修为 delta!=0 才 weak<br>experiments/ab/COMPARE.md — CG-02-arvo-47101 双跑对照行 |
 | CG-02 |  | 否 | 严重性六维草案 + 复核裁决（派生文档，未重跑）（post_freeze／未重跑） | experiments/severity/CG-02.json<br>experiments/severity/review.json — CG-02 integrity_impact 裁决 |
 | CG-04 | **是** | 否 | P0 报告字段矛盾复现样本 → report.py 拆分 llm_rejected/final_subject_from（post_freeze／未重跑／影响盲测） | experiments/remediation-round1/RESULT.json — cg04_contribution_contradiction：rejected_by_llm=['ReadMNGImage'] 而最终 subject 就是 ReadMNGImage<br>tests/test_report_truthfulness.py — 该矛盾的回归测试 |
@@ -87,17 +90,17 @@
 | EG-02 | **是** | 否 | 官方 socket 全通 + RCE/flag 取得，poc.pdf 已落在工作区（答案级回灌）（post_freeze／重跑／**答案回灌**／影响盲测） | experiments/eg-44034/RESULT.json — rce_achieved=true、flag matches_expected=true<br>workspace/EG-02-arvo-44034/poc.pdf — 现成利用输入就在工作区 |
 | EG-02 |  | 否 | 严重性草案（派生文档，未重跑）（post_freeze／未重跑） | experiments/severity/EG-02.json |
 
-**盲测可用 1 例**：`AR6`。其余案例的首跑成绩保留，但不得再当作盲测成绩使用；补给新任务是恢复盲测的唯一路径。
+**盲测可用 2 例**：`AR6`、`AR7`。其余案例的首跑成绩保留，但不得再当作盲测成绩使用；补给新任务是恢复盲测的唯一路径。
 
 > dirty 判定口径：`answer_feedback`（官方 PoC／参考答案／现成利用进工作区）或 `affects_blind_eval`（用该案例重跑并据此改工具、开发构造器）。纯派生文档（严重性草案、夹具引用）只披露、不判 dirty。
 
 ## 互斥性结论
 
 - 开发集 DEV_SET（8 例）：`arvo:10096`、`arvo:11253`、`arvo:12466`、`arvo:3938`、`arvo:3940`、`arvo:44034`、`arvo:47947`、`arvo:54625`
-- 正式集 EVAL_SET（8 例）：`arvo:42470179`、`arvo:47101`、`arvo:10400`、`arvo:10147`、`arvo:53666`、`arvo:11081`、`user:cybergym/arvo_18224`、`user:cybergym/arvo_44034`
+- 正式集 EVAL_SET（9 例）：`arvo:42470179`、`arvo:42485152`、`arvo:47101`、`arvo:10400`、`arvo:10147`、`arvo:53666`、`arvo:11081`、`user:cybergym/arvo_18224`、`user:cybergym/arvo_44034`
 - 交集：∅
 
-**互斥性结论：EVAL_SET(8) ∩ DEV_SET(8) = ∅ —— 交集为空，8 个正式集任务均未在开发期参与工具修复／构造器开发／提示词调优。**
+**互斥性结论：EVAL_SET(9) ∩ DEV_SET(8) = ∅ —— 交集为空，9 个正式集任务均未在开发期参与工具修复／构造器开发／提示词调优。**
 
 ## 硬规则
 
@@ -105,7 +108,7 @@
 - 正式集任务只允许 `allowed_inputs` 列出的自带输入；封存路径（`sealed_paths`）在评测容器内不可见。
 - 每条成绩落账前必须跑 `experiments/leak_scan.py`：workspace 的 artifacts/logs 一旦出现封存答案字符串或其 sha256，该条成绩作废。
 
-- ⚠ 工作区无 repo-vul.tar.gz，正式集冻结前需补齐归档：AR6、EG-01、EG-02
+- ⚠ 工作区无 repo-vul.tar.gz，正式集冻结前需补齐归档：AR6、AR7、EG-01、EG-02
 - ⚠ verdict=withdrawn，只能作为冻结样本，不可计入可跑正式集：EG-01
 - ⚠ 部分条目 image_digest 无法解析（镜像缺失或无 image_vul），已在 unresolved 标记
 - ⚠ 冻结集内 6 例在冻结后形成 dev_history 且判定 dirty（含构造器复跑／用其驱动工具改动／答案回灌），逐条见 dev_history 与 blind_set.excluded；首跑成绩与 case.json/LEDGER 一律不改，但这些案例不再具备盲测资格
