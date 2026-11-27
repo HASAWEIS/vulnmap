@@ -118,3 +118,32 @@ python3 bin/autonomy.py verify    experiments/autonomy/runs/auto \
 python3 bin/autonomy.py attach    experiments/autonomy/runs/auto \
   --db .platform/platform.db --task <platform-task-id>
 ```
+## 10. 接进课程流程（2026-11-27）
+
+`agent/autonomy/platform_adapter.py` 从平台事实（`tasks` / `task_events` / `evidence` /
+`task_evidence` / `reports`）生成运行包，**只读平台库**：
+
+| 平台事实 | 落成 |
+|---|---|
+| `tasks.budget_json` | `run.json.budget`（`max_turns` → 观测上限，`max_seconds`） |
+| `task_events` | `observations.jsonl`（逐事件，含 seq/stage） |
+| `evidence` + `task_evidence` | `artifacts.jsonl` + 包内 `artifacts/` 副本（哈希核对） |
+| `reports` | `result.json`（仅当其内容含 `findings`） |
+| 平台身份 | `run_id = task_id` |
+
+```bash
+python3 bin/platform.py --db .platform/platform.db autonomy-pack <task_id> \
+  --pack <dir> [--expected fixtures/.../expected.json]
+```
+
+实测（真实平台库、`arvo:44034`）：生成 5 条观测、0 件证据，分类为 `manual_baseline`
+（理由「无工件记录，无法主张任何完成」）——没有产物的任务不会被算成自主完成。
+
+### 回归（4 项，`tests/test_autonomy_platform.py`）
+
+| 场景 | 期望 |
+|---|---|
+| 有证据 + 报告 findings | `agent_autonomous` + `verdict=pass` |
+| 只有事件、无证据 | `manual_baseline`，理由含「无工件记录」 |
+| 任务不存在 | `ok=false, reason=task_not_found` |
+| 包内证据被篡改 | `artifact_provenance=false`，`fail` |

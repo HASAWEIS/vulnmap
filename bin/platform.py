@@ -1059,6 +1059,25 @@ def _print_json(doc) -> None:
     print(json.dumps(doc, ensure_ascii=False, indent=2))
 
 
+def cmd_autonomy_pack(args) -> int:
+    """从平台事实生成自主运行包；可选立即独立校验。"""
+    from agent.autonomy.platform_adapter import pack_from_platform
+    from agent.autonomy.verify import verify
+
+    out = pack_from_platform(args.db, args.task_id, args.pack,
+                             event_cap=args.event_cap)
+    print(json.dumps(out, ensure_ascii=False, indent=2))
+    if not out.get("ok"):
+        return 2
+    if args.expected:
+        res = verify(args.pack, expected_path=args.expected,
+                     require_autonomous=not args.allow_assisted)
+        print(json.dumps({k: res[k] for k in ("class", "verdict", "checks", "reasons")},
+                         ensure_ascii=False, indent=2))
+        return 0 if res["verdict"] == "pass" else 2
+    return 0
+
+
 def cmd_patch_propose(args) -> int:
     from agent.platform.adaptive.patch import PatchError, PatchUnsupported
 
@@ -1189,6 +1208,16 @@ def build_parser() -> argparse.ArgumentParser:
         if name == "events":
             sp.add_argument("--after", type=int, default=0)
         sp.set_defaults(func=fn)
+
+    ap_pack = sub.add_parser("autonomy-pack",
+                             help="从平台事实生成自主运行包（只读平台库）")
+    ap_pack.add_argument("task_id")
+    ap_pack.add_argument("--pack", default="")
+    ap_pack.add_argument("--event-cap", type=int, default=200)
+    ap_pack.add_argument("--expected", default="",
+                         help="保留答案路径；给出则立即独立校验")
+    ap_pack.add_argument("--allow-assisted", action="store_true")
+    ap_pack.set_defaults(func=cmd_autonomy_pack)
 
     un = sub.add_parser("understand", help="程序理解（READY→UNDERSTANDING，写 program.indexed）")
     un.add_argument("task_id")
