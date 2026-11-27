@@ -13,6 +13,7 @@ judgments/、review.layers、MANIFEST.json / SHA256SUMS。用冻结实现复核�
 from __future__ import annotations
 
 import importlib.util
+import re
 import json
 import sys
 from pathlib import Path
@@ -71,3 +72,53 @@ def test_disposition_counts_do_not_inflate():
     assert counts.get("strict_v2_packs") == 5, counts
     assert counts.get("materials_recompute_ok") == 7, counts
     assert sorted(counts.get("manual_packs_reference_only") or []) == ["AR6", "AR7"]
+
+
+# ---------------------------------------------------------------- 案例文档口径
+CASE_DOCS = [
+    ROOT / "docs" / "CASE6-AR6-20261127.md",
+    ROOT / "docs" / "CASE7-AR7-20261127.md",
+    ROOT / "docs" / "COURSE-GAP-DISPOSITION.md",
+]
+
+#: 旧结论的书面形式；出现即必须同时带撤销标记（或删除线）
+STALE_PATTERNS = [
+    r"严格可提交（V2 内部）\s*\|\s*\*\*true\*\*",
+    r"可提交\s*[67]/10",
+    r"（[67]/10）",
+    r"（[67] / 10）",
+    r"下一轮[^\n]*7/10",
+    r"5\s*→\s*[67]",
+    r"6\s*已可提交",
+]
+
+
+@pytest.mark.parametrize("doc", CASE_DOCS, ids=lambda p: p.name)
+def test_no_unrevoked_stale_counts(doc):
+    """旧结论允许保留作历史，但必须就地标为已撤销。"""
+    if not doc.is_file():
+        pytest.skip(f"{doc.name} 不存在")
+    lines = doc.read_text(encoding="utf-8").splitlines()
+    offenders = []
+    for i, line in enumerate(lines):
+        for pat in STALE_PATTERNS:
+            if not re.search(pat, line):
+                continue
+            window = "\n".join(lines[max(0, i - 2): i + 3])
+            if "撤销" in window or "~~" in line:
+                continue
+            offenders.append(f"{doc.name}:{i + 1}: {line.strip()[:80]}")
+    assert not offenders, "存在未标注撤销的旧口径：" + "; ".join(offenders)
+
+
+@pytest.mark.parametrize("doc", CASE_DOCS, ids=lambda p: p.name)
+def test_case_doc_mentions_strict_five(doc):
+    """每份案例/处置文档都必须能把人引到「严格 5」这个当前结论。"""
+    if not doc.is_file():
+        pytest.skip(f"{doc.name} 不存在")
+    text = doc.read_text(encoding="utf-8")
+    assert ("严格可提交仍为 **5**" in text
+            or "严格可提交为 **5/10**" in text
+            or "严格 V2 提交包" in text
+            or "STRICT-V2-RECHECK-20261127.md" in text), \
+        f"{doc.name} 没有指向当前严格口径（5）"
