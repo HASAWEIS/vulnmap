@@ -429,3 +429,27 @@ python3 experiments/course-review-batch/recompute_batch.py --check   # CG-29/30/
 或明确接受 CG-18 保持 not_submittable，把名额让给替代案例。
 
 明细：[CG18-NEW-RUN-20261126.md](CG18-NEW-RUN-20261126.md)。
+---
+
+## 8. 决定（2026-11-27，项目方）：CG-18 名额转替换，CG-07 降优先
+
+| 案例 | 决策 | 名额处理 | 优先级 |
+|---|---|---|---|
+| CG-18 | **replace** | replacement_pending：保留材料作参考，不计数 | P1（找替代） |
+| CG-07 | retain | low_priority_retain：不阻塞交付 | P5 |
+| CG-14 | replace | 替换评估 | P4 |
+| VG-01 | block | 等外部对照材料 | P5 |
+| arvo:67968 | retain | 立项，未计数 | P2 |
+
+依据：CG-18 的历史 D2 缺参数无法补录；2026-11-26 的新运行已证明入口能按 run_id 留证
+（4 次调用、参数证据 complete），但模型 3 轮候选全部未通过双端，决定性调用仍无参数。
+继续加轮次的期望收益低，因此**不再投入**，名额交给替代案例。
+
+计数不变：
+
+```text
+10 = 5 已通过 + arvo:67968 + 4 个名额（CG-07 / CG-18→替换 / CG-14→替换 / VG-01）
+```
+
+即：即使 67968 过线，仍差 4 份；CG-18 与 CG-14 各需一个**新的替代根**，
+不能拿同一案例填两个名额。
