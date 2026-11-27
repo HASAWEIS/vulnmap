@@ -96,3 +96,27 @@ python3 -m pytest tests/test_verify_call_ledger.py -q
 - 账本默认关闭（不设 VULNMAP_LLM_LEDGER 就不写文件），避免默认产生额外落盘；
 - 账本只证明“发了什么”，不证明“模型说得对”；
 - 与 adaptive/call_ledger.py（A/B 用）是两套入口、同一套三态口径，字段名保持一致。
+## 9. 门禁修正（2026-11-27）：必需调用逐条核对
+
+上一版 `_param_evidence` 只比“有没有行 / 有没有哈希”，因此**轨迹要求 2 条、账本只剩 1 条**
+时仍会返回 `complete`。修正后：
+
+1. 轨迹（每轮 `llm_calls`）显式记下 `llm_call_id` 与 `request_sha256`；
+2. `param_evidence` 改为按 `(run_id, call_id)` **逐条**核对，不再拿轮数比行数；
+3. 四类问题分别报告：`missing`（本 run 无此 id）/ `foreign`（只在别的 run）/
+   `hash_mismatch`（哈希不符）/ `wrong_state`（不是 sent，如预算拒绝不能顶替）；
+4. 有任一问题即 `incomplete`，并列出具体缺失引用；**判定与历史记录都不动**。
+
+五个验收场景（`tests/test_verify_call_ledger.py`）：
+
+| 场景 | 预期 | 结果 |
+|---|---|---|
+| 必需调用全对上 | complete | ✅ |
+| 缺一条必需调用 | incomplete + missing | ✅（旧口径会误报 complete，测试里显式断言了这一点） |
+| 行数够但一条来自别的 run | incomplete + foreign | ✅ |
+| 引用对上但哈希不一致 | incomplete + hash_mismatch | ✅ |
+| 只有预算拒绝记录 | incomplete + wrong_state，拒绝记录保留 | ✅ |
+
+```bash
+python3 -m pytest tests/test_verify_call_ledger.py -q     # 11 passed
+```

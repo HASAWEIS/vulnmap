@@ -216,6 +216,10 @@ def run_diverse_loop(*, claim: dict, context: str, fmt: str, execute, call_llm,
         info = {
             "retry_round": retry_round,
             "status": res.status,
+            # 轨迹里显式记下这次调用的账本身份：后面按 (run_id, call_id) 对账，
+            # 不靠"轮数 == 行数"这种猜法。
+            "llm_call_id": str((getattr(res, "ledger", None) or {}).get("call_id") or ""),
+            "request_sha256": str(getattr(res, "request_sha256", "") or ""),
             "finish_reason": getattr(res, "finish_reason", "") or "",
             "completion_tokens": int(getattr(res, "completion_tokens", 0) or 0),
             "prompt_tokens": int(getattr(res, "prompt_tokens", 0) or 0),
@@ -2003,8 +2007,21 @@ class VerifyStage(Stage):
                 seed_block=seed_block, seeds=seeds, contract=contract,
                 log=lambda msg: self.store.add_blackboard(
                     self.run_id, "action", "模型闭环", msg, status="ok"))
-            # 参数证据：只报告账本是否完整，**不参与漏洞判定**。
-            result["param_evidence"] = self._param_evidence(len(result.get("rounds") or []))
+            # 参数证据：轨迹里每轮实际调用即"必需证据"，逐条核对账本。
+            required = []
+            seen_call = set()
+            for rec in result.get("rounds") or ():
+                for call in rec.get("llm_calls") or ():
+                    cid = str((call or {}).get("llm_call_id") or "")
+                    if not cid or cid in seen_call:
+                        continue
+                    seen_call.add(cid)
+                    required.append({"call_id": cid,
+                                     "request_sha256": str(
+                                         (call or {}).get("request_sha256") or "")})
+            result["llm_required_calls"] = required
+            result["param_evidence"] = self._param_evidence(
+                len(result.get("rounds") or []), required)
             result["format"] = fmt
             result["claim_subject"] = claim.get("subject", "")
             result["harness_contract"] = contract
@@ -2031,7 +2048,7 @@ class VerifyStage(Stage):
             return {"rounds": [], "error": f"{type(exc).__name__}: {exc}"}
 
 
-    def _param_evidence(self, loop_rounds: int) -> dict:
+    def _param_evidence(self, loop_rounds: int, required_calls=None) -> dict:
         """参数证据完整性：只读账本，**不改判据、不改 verdict**。
 
         口径（对应课程要求）：
@@ -2041,6 +2058,15 @@ class VerifyStage(Stage):
         缺证据只让报告写"参数证据不完整"，不让 verify 变 fail。
         """
         from .. import llm as llm_mod
+        if required_calls:
+            checked = llm_mod.ledger_check_required(
+                self.run_id, self.name, list(required_calls))
+            checked["call_key_prefix"] = "%s::" % self.run_id
+            checked["loop_rounds"] = int(loop_rounds)
+            checked["required_calls"] = len(required_calls)
+            checked["note"] = ("参数证据只描述可追溯性，不改变漏洞判定；"
+                               "缺失项逐条列在 missing / foreign / hash_mismatch / wrong_state")
+            return checked
         summary = llm_mod.ledger_summary(self.run_id, self.name)
         calls = int(summary.get("sent") or 0) + int(summary.get("refused") or 0)
         status = str(summary.get("status") or "not_recorded")

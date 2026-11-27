@@ -263,3 +263,84 @@ def test_param_evidence_never_reports_complete_without_rows(tmp_path, monkeypatc
     no_rows = VerifyStage._param_evidence(Shim(), 3)
     assert no_rows["status"] == "incomplete"
     assert no_rows["reason"] == "no_rows_for_run"
+# ---------------------------------------------------------------- 必需调用逐条核对
+def _write_rows(path, rows):
+    path.write_text("".join(json.dumps(r, ensure_ascii=False) + "\n" for r in rows),
+                    encoding="utf-8")
+
+
+def _row(run_id, call_id, sha="a" * 64, state="sent"):
+    return {"schema": "vulnmap.verify_call_ledger.v1", "run_id": run_id,
+            "stage": "verify", "call_id": call_id,
+            "call_key": "%s::%s" % (run_id, call_id),
+            "call_state": state, "request_sha256": sha if state == "sent" else "",
+            "response_sha256": "b" * 64 if state == "sent" else "",
+            "params_sent": {"model": "m", "max_tokens": 8000},
+            "params_not_sent": {"top_p": "absent_by_design"},
+            "params_missing": {}, "usage": {"state": "sent", "total_tokens": 10}}
+
+
+def test_required_calls_all_traced_is_complete(ledger_env):
+    _write_rows(ledger_env, [_row("r-1", "call-0001"), _row("r-1", "call-0002")])
+    out = llm_mod.ledger_check_required("r-1", "verify", [
+        {"call_id": "call-0001", "request_sha256": "a" * 64},
+        {"call_id": "call-0002", "request_sha256": "a" * 64}])
+    assert out["status"] == "complete"
+    assert out["checked"] == 2 and out["missing"] == []
+
+
+def test_one_required_call_missing_is_incomplete(ledger_env):
+    # 旧反例：轨迹要求 2 条，账本只剩 1 条 —— 旧逻辑会误报 complete
+    _write_rows(ledger_env, [_row("r-1", "call-0001")])
+    out = llm_mod.ledger_check_required("r-1", "verify", [
+        {"call_id": "call-0001", "request_sha256": "a" * 64},
+        {"call_id": "call-0002", "request_sha256": "a" * 64}])
+    assert out["status"] == "incomplete"
+    assert out["missing"] == ["call-0002"]
+    # 旧口径（只比行数/哈希）在同样的文件上仍会说 complete —— 这就是被修掉的误报
+    assert llm_mod.ledger_summary("r-1", "verify")["status"] == "complete"
+
+
+def test_call_id_from_another_run_is_foreign(ledger_env):
+    _write_rows(ledger_env, [_row("r-1", "call-0001"), _row("r-2", "call-0002")])
+    out = llm_mod.ledger_check_required("r-1", "verify", [
+        {"call_id": "call-0001", "request_sha256": "a" * 64},
+        {"call_id": "call-0002", "request_sha256": "a" * 64}])
+    assert out["status"] == "incomplete"
+    assert out["foreign"] == ["call-0002"]
+    assert out["missing"] == []
+
+
+def test_hash_mismatch_is_incomplete(ledger_env):
+    _write_rows(ledger_env, [_row("r-1", "call-0001", sha="c" * 64)])
+    out = llm_mod.ledger_check_required("r-1", "verify", [
+        {"call_id": "call-0001", "request_sha256": "a" * 64}])
+    assert out["status"] == "incomplete"
+    assert out["hash_mismatch"][0]["call_id"] == "call-0001"
+
+
+def test_refused_row_cannot_stand_in_for_missing_sent_call(ledger_env):
+    _write_rows(ledger_env, [
+        _row("r-1", "call-0001"),
+        _row("r-1", "call-0002", state="refused_before_send")])
+    out = llm_mod.ledger_check_required("r-1", "verify", [
+        {"call_id": "call-0001", "request_sha256": "a" * 64},
+        {"call_id": "call-0002", "request_sha256": "a" * 64}])
+    assert out["status"] == "incomplete"
+    assert out["wrong_state"][0]["call_id"] == "call-0002"
+    assert out["refused"] == 1            # 拒绝记录保留，但不顶替
+
+
+def test_verify_stage_reports_incomplete_when_required_missing(ledger_env):
+    from agent.stages.verify import VerifyStage
+
+    class Shim:
+        run_id = "r-verify-gate"
+        name = "verify"
+
+    _write_rows(ledger_env, [_row("r-verify-gate", "call-0001")])
+    out = VerifyStage._param_evidence(
+        Shim(), 2, [{"call_id": "call-0001", "request_sha256": "a" * 64},
+                    {"call_id": "call-0002", "request_sha256": "a" * 64}])
+    assert out["status"] == "incomplete"
+    assert out["missing"] == ["call-0002"]

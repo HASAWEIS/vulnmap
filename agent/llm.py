@@ -180,6 +180,79 @@ def _ledger_record(*, cfg, ctx, call_id: str, prompt_version: str,
     }
 
 
+def ledger_check_required(run_id: str, stage: str, required: list) -> dict:
+    """按轨迹声明的“必需调用”逐条核对账本，而不是比行数。
+
+    required 每项形如 call_id + request_sha256，由运行轨迹（verify 每轮 llm_calls）给出。
+    检查项：missing（本 run 无此 call_id）/ foreign（只在别的 run）/
+    hash_mismatch（哈希不符）/ wrong_state（不是 sent，不能顶替）。
+
+    status=complete 要求 required 非空且四类问题都为空；只描述可追溯性，
+    不参与漏洞判定。
+    """
+    import json
+    path = ledger_path()
+    if path is None:
+        return {"status": "not_recorded", "reason": "ledger_disabled",
+                "checked": 0, "missing": [], "foreign": [], "hash_mismatch": [],
+                "wrong_state": [], "rows": 0, "refused": 0, "enabled": False}
+    rows, bad_lines = [], 0
+    try:
+        if path.is_file():
+            for line in path.read_text(encoding="utf-8").splitlines():
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    rows.append(json.loads(line))
+                except Exception:                 # noqa: BLE001
+                    bad_lines += 1
+    except OSError as exc:
+        return {"status": "incomplete", "reason": "ledger_unreadable: %s" % exc,
+                "checked": 0, "missing": [], "foreign": [], "hash_mismatch": [],
+                "wrong_state": [], "rows": 0, "refused": 0, "enabled": True}
+
+    scoped = [r for r in rows
+              if str(r.get("run_id") or "") == str(run_id or "")
+              and (not stage or str(r.get("stage") or "") == str(stage or ""))]
+    by_id = {str(r.get("call_id") or ""): r for r in scoped}
+    any_run = {str(r.get("call_id") or "") for r in rows}
+
+    missing, foreign, mismatch, wrong_state = [], [], [], []
+    checked = 0
+    for item in required or ():
+        cid = str((item or {}).get("call_id") or "")
+        if not cid:
+            continue
+        checked += 1
+        row = by_id.get(cid)
+        if row is None:
+            (foreign if cid in any_run else missing).append(cid)
+            continue
+        if str(row.get("call_state") or "") != "sent":
+            wrong_state.append({"call_id": cid,
+                                "call_state": row.get("call_state")})
+            continue
+        expected = str((item or {}).get("request_sha256") or "")
+        got = str(row.get("request_sha256") or "")
+        if (expected and got != expected) or not got:
+            mismatch.append({"call_id": cid, "expected": expected, "actual": got})
+
+    problems = bool(missing or foreign or mismatch or wrong_state or bad_lines)
+    if not required:
+        status, reason = "incomplete", "no_required_calls_declared"
+    elif problems:
+        status, reason = "incomplete", "required_calls_not_fully_traced"
+    else:
+        status, reason = "complete", ""
+    return {"status": status, "reason": reason, "checked": checked,
+            "missing": missing, "foreign": foreign,
+            "hash_mismatch": mismatch, "wrong_state": wrong_state,
+            "rows": len(scoped), "refused": sum(
+                1 for r in scoped if r.get("call_state") == "refused_before_send"),
+            "enabled": True, "path": str(path)}
+
+
 def ledger_summary(run_id: str, stage: str = "") -> dict:
     """只读汇总：本次 run（可按 stage 过滤）的账本完整性。
 
@@ -317,123 +390,6 @@ def _write_ledger(record: dict):
     except Exception as exc:                  # noqa: BLE001 - 失败要上报
         return False, "%s: %s" % (type(exc).__name__, exc)
 
-
-def _ledger_record(*, cfg, ctx, call_id: str, prompt_version: str,
-                   call_state: str, refusal: str = "", res=None,
-                   error: str = "") -> dict:
-    """组装一条调用记录（纯函数；不含 api_key / Authorization）。"""
-    import datetime
-    body = {}
-    request_sha = ""
-    response_sha = ""
-    usage = {"state": "missing", "reason": "request_not_sent"}
-    status = call_state
-    attempts = 0
-    if res is not None:
-        body = dict(getattr(res, "sent_body", {}) or {})
-        request_sha = str(getattr(res, "request_sha256", "") or "")
-        response_sha = str(getattr(res, "response_sha256", "") or "")
-        status = str(getattr(res, "status", "") or "")
-        attempts = int(getattr(res, "requests", 0) or 0)
-        if getattr(res, "tokens", 0) or getattr(res, "prompt_tokens", 0):
-            usage = {"state": "sent",
-                     "prompt_tokens": int(getattr(res, "prompt_tokens", 0) or 0),
-                     "completion_tokens": int(getattr(res, "completion_tokens", 0) or 0),
-                     "total_tokens": int(getattr(res, "tokens", 0) or 0),
-                     "reasoning_tokens": int(getattr(res, "reasoning_tokens", 0) or 0)}
-        elif request_sha:
-            usage = {"state": "missing", "reason": "usage_absent"}
-    sent = {}
-    missing = {}
-    if body:
-        for key in ("model", "temperature", "max_tokens", "response_format",
-                    "thinking"):
-            if key in body:
-                sent[key] = body.get(key)
-        # 请求体存在但缺关键参数 -> missing（不回填默认值）
-        for key in ("model", "temperature", "max_tokens"):
-            if key not in body:
-                missing[key] = "absent_from_request_body"
-        for key in ("top_p", "seed", "n", "stop"):
-            if key in body:
-                sent[key] = body.get(key)
-    else:
-        for key in ("model", "temperature", "max_tokens", "response_format",
-                    "thinking"):
-            missing[key] = ("request_not_built" if call_state != "sent"
-                            else "body_not_captured")
-    not_sent = {k: v for k, v in NOT_SENT_PARAMS.items() if k not in body}
-    record = {
-        "schema": "vulnmap.verify_call_ledger.v1",
-        "schema_version": 1,
-        "run_id": str(ctx.get("run_id") or ""),
-        "stage": str(ctx.get("stage") or ""),
-        "call_id": call_id,
-        "call_key": "%s::%s" % (ctx.get("run_id") or "", call_id),
-        "prompt_version": str(prompt_version or ""),
-        "model": str(getattr(cfg, "model", "") or ""),
-        "endpoint_host": _endpoint_host(getattr(cfg, "base_url", "")),
-        "call_state": call_state,
-        "refusal": refusal,
-        "status": status,
-        "attempts": attempts,
-        "request_sha256": request_sha,
-        "response_sha256": response_sha,
-        "params_sent": sent,
-        "params_not_sent": not_sent,
-        "params_missing": missing,
-        "usage": usage,
-        "error": error,
-        "recorded_at": datetime.datetime.now(
-            datetime.timezone.utc).isoformat(timespec="seconds"),
-    }
-    return record
-
-
-def ledger_summary(run_id: str, stage: str = "") -> dict:
-    """只读汇总：本次 run（可按 stage 过滤）的账本完整性。
-
-    供 VerifyStage 判断"参数证据是否完整"；**不参与漏洞判定**。
-    """
-    import json
-    path = ledger_path()
-    if path is None:
-        return {"status": "not_recorded", "reason": "ledger_disabled",
-                "enabled": False, "rows": 0, "sent": 0, "refused": 0,
-                "with_request_hash": 0, "failed_writes": 0, "path": ""}
-    rows, failed = [], 0
-    try:
-        if path.is_file():
-            for line in path.read_text(encoding="utf-8").splitlines():
-                line = line.strip()
-                if not line:
-                    continue
-                try:
-                    rows.append(json.loads(line))
-                except Exception:             # noqa: BLE001 - 坏行不计入
-                    failed += 1
-    except OSError as exc:
-        return {"status": "incomplete", "reason": "ledger_unreadable: %s" % exc,
-                "enabled": True, "rows": 0, "sent": 0, "refused": 0,
-                "with_request_hash": 0, "failed_writes": 1, "path": str(path)}
-    scoped = [r for r in rows
-              if str(r.get("run_id") or "") == str(run_id or "")
-              and (not stage or str(r.get("stage") or "") == str(stage or ""))]
-    sent = [r for r in scoped if r.get("call_state") == "sent"]
-    refused = [r for r in scoped if r.get("call_state") == "refused_before_send"]
-    with_hash = [r for r in sent if r.get("request_sha256")]
-    status = "complete"
-    reason = ""
-    if failed:
-        status, reason = "incomplete", "malformed_lines:%d" % failed
-    elif sent and len(with_hash) != len(sent):
-        status, reason = "incomplete", "sent_without_request_hash"
-    elif not sent and not refused:
-        status, reason = "incomplete", "no_rows_for_run"
-    return {"status": status, "reason": reason, "enabled": True,
-            "rows": len(scoped), "sent": len(sent), "refused": len(refused),
-            "with_request_hash": len(with_hash), "failed_writes": failed,
-            "path": str(path)}
 
 
 
