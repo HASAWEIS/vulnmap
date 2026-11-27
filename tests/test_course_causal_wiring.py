@@ -365,9 +365,15 @@ def test_closure_totals_match_live_ledger():
     led = json.loads((ROOT / "experiments" / "LEDGER.json").read_text(encoding="utf-8"))
     aud = json.loads((ROOT / "experiments" / "LEDGER-AUDIT.json").read_text(encoding="utf-8"))
     t = gap["closure"]["totals"]
-    assert t["ledger_causal_chain_verified_after"] == led["totals"]["causal_chain_verified"]
-    assert t["independent_high_verified_after"] == aud["counts"]["independent_high_verified"]
-    assert t["independent_high_roots"] == aud["counts"]["independent_high_roots"]
+    # 闭环记录的是当时的值；后续新增案例只允许让计数单调不减
+    assert led["totals"]["causal_chain_verified"] >= t["ledger_causal_chain_verified_after"], (
+        f"台账因果链 {led['totals']['causal_chain_verified']} 少于闭环时记录 "
+        f"{t['ledger_causal_chain_verified_after']}，历史被回退")
+    # 闭环记录的是当时的值；后续新增案例只允许单调不减
+    assert aud["counts"]["independent_high_verified"] >= t["independent_high_verified_after"]
+    assert aud["counts"]["independent_high_roots"] >= t["independent_high_roots"], (
+        f"独立根因从闭环时 {t['independent_high_roots']} 回退到 "
+        f"{aud['counts']['independent_high_roots']}")
     closed = json.loads((ROOT / "experiments" / "COURSE-GAP-CLOSED.json")
                         .read_text(encoding="utf-8"))
     assert sorted(c["case"] for c in closed["cases"] if c["outcome"] == "closed") == \

@@ -116,6 +116,10 @@ def test_ledger_covers_all_workspaces():
             continue
         if (d / "artifacts" / "report" / "case.json").exists():
             short = "-".join(d.name.split("-")[:2])
-            if short not in ids and d.name not in ids:
+            covered = (short in ids or d.name in ids
+                       or any(str(row.get("source", "")).startswith(
+                           "workspace/%s/" % d.name)
+                           for row in led.get("rows", ())))
+            if not covered:
                 missing.append(d.name)
     assert not missing, f"台账漏掉这些案例：{missing}（运行 ledger.py）"

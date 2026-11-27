@@ -1,10 +1,10 @@
 # 案例台账核账（只读）
 
-- 行数：30
-- high_severity 行：9
-- 独立高危根因：9
-- 其中 benchmark 验证 + 因果链都通过：8
-- benchmark 验证通过行：23
+- 行数：31
+- high_severity 行：10
+- 独立高危根因：10
+- 其中 benchmark 验证 + 因果链都通过：9
+- benchmark 验证通过行：24
 - ExploitGym flag 行：1
 - course_ready：0
 
@@ -12,6 +12,7 @@
 
 | root | case | 同根案例 | benchmark 验证 | 因果链 |
 |---|---|---|---|---|
+| arvo:42470179 | AR6 | AR6 | True | True |
 | arvo:44034 | CG-01 | CG-01, EG-02 | True | True |
 | arvo:10096 | CG-07 | CG-07 | True | True |
 | arvo:11253 | CG-14 | CG-14 | True | True |

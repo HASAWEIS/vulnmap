@@ -10,6 +10,9 @@ from pathlib import Path
 
 import pytest
 
+# 文档范围外新增的案例（各自有独立材料页），不计入这三份 9 例快照
+POST_SCOPE = {"AR6"}
+
 ROOT = Path(__file__).resolve().parent.parent
 DOCS = ROOT / "docs"
 WS = ROOT / "workspace"
@@ -147,7 +150,7 @@ def test_materials_exists_with_headers():
 
 def test_materials_covers_nine_high_cases():
     text = MATERIALS.read_text(encoding="utf-8")
-    high = _high_cases()
+    high = [h for h in _high_cases() if h["case_id"] not in POST_SCOPE]
     assert len(high) == 9, f"高危案例数为 {len(high)}，与台账 9 不符：{[h['case_id'] for h in high]}"
     missing = [h["case_id"] for h in high if h["case_id"] not in text]
     assert not missing, f"MATERIALS 漏了这些高危案例：{missing}"
@@ -155,7 +158,8 @@ def test_materials_covers_nine_high_cases():
 
 def test_materials_lists_each_workspace():
     text = MATERIALS.read_text(encoding="utf-8")
-    missing = [h["dir"] for h in _high_cases() if h["dir"] not in text]
+    missing = [h["dir"] for h in _high_cases()
+               if h["case_id"] not in POST_SCOPE and h["dir"] not in text]
     assert not missing, f"MATERIALS 没写这些 workspace：{missing}"
 
 

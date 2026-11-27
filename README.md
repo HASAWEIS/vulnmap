@@ -234,17 +234,17 @@ research-status research-events review casepack attach transition patch
 
 | 指标 | 当前值 |
 |---|---:|
-| 台账案例行 | 30 |
-| 独立高危根因（按根因键去重） | **9** |
-| 其中"Benchmark 验证 + 因果链"同时成立 | **8** |
-| V2 口径内部复核可提交 | **5 / 8** |
+| 台账案例行 | 31 |
+| 独立高危根因（按根因键去重） | **10** |
+| 其中"Benchmark 验证 + 因果链"同时成立 | **9** |
+| V2 口径内部复核可提交 | **6 / 9** |
 | 第三方独立复核 | **0** |
 | 后端 `course_ready` | **0** |
 | 测试 | 1572 passed · 8 skipped · 17 xfailed（旧前端断言待迁移） |
 
 需要如实说明的边界：
 
-- **没有 10 个独立可提交案例。** 5 例已打包并在干净目录复算通过，但复核方是平台维护者本人（内部自审），不是第三方；
+- **独立根因达 10 个，但可提交仍是 6 份。** 6 例已打包并在干净目录复算通过，复核方是平台维护者本人（内部自审），不是第三方；
 - **ExploitGym 必选项未认定。** 历史 10/10 flag 只证明链路可达，缺官方/第三方判定，且与 CG-01 同根，不增加独立计数；
 - **CG-07 / CG-18** 的历史采样参数无法补录，D2 保持 `false`；新账本只记录后续调用；
 - **CG-14** 缺自主生成证据（PoC 与答案模板同字节），不可提交；
@@ -296,6 +296,7 @@ vulnmap_platform/     只读 Web 视图 + API
 | 模型只读 A/B | [V3-REAL-AB.md](docs/V3-REAL-AB.md) · [AB-ERROR-REVIEW.md](docs/AB-ERROR-REVIEW.md) |
 | 规则诊断优先级 | [RULE-DIAGNOSIS-PRIORITY.md](docs/RULE-DIAGNOSIS-PRIORITY.md) |
 | 课程判据与复核 | [COURSE-CRITERIA-V2.md](docs/COURSE-CRITERIA-V2.md) · [COURSE-CASE-AUDIT.md](docs/COURSE-CASE-AUDIT.md) |
+| 第 6 份案例（AR6） | [CASE6-AR6-20261127.md](docs/CASE6-AR6-20261127.md) · [CASE6-CHECKLIST.md](docs/CASE6-CHECKLIST.md) |
 | 提交包与缺口 | [COURSE-SUBMISSION-PACK-20261125.md](docs/COURSE-SUBMISSION-PACK-20261125.md) · [COURSE-GAP-DISPOSITION.md](docs/COURSE-GAP-DISPOSITION.md) |
 | 当前状态与统计 | [STATUS.md](docs/STATUS.md) · [STATS.md](docs/STATS.md) |
 

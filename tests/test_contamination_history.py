@@ -165,7 +165,8 @@ def test_doc_discloses_answer_feedback(md):
 
 def test_clean_claim_is_not_blind_claim(md):
     """「干净 7 例」必须与「盲测可用」分开表述，不能拿污染口径冒充盲测口径。"""
-    assert "**干净 7 例**" in md
+    # 干净例数会随新增案例增加，这里只要求「干净」与「盲测」分开表述
+    assert "**干净 " in md and " 例**" in md, "缺「干净 N 例」表述"
     assert "**盲测可用" in md
     assert "不等于" in md and "盲测" in md
 

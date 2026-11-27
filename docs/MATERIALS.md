@@ -1,5 +1,8 @@
 # 材料清单：9 个高危案例（closeout）
 
+> **范围声明（2026-11-27）**：本文覆盖截至 2026-11-26 的 **9 例**高危范围；之后新增的 AR6（arvo:42470179）不在本文统计内，材料见 [CASE6-AR6-20261127.md](CASE6-AR6-20261127.md)。
+
+
 > 只读盘点：本文件不修改任何 case.json / severity.json / experiments/LEDGER.json，也不新增构造器。
 > 盘点范围 = workspace 中 acceptance.high_severity_confirmed 为 true 的 9 个案例。
 > 复核：python3 -m pytest tests/test_materials.py -q

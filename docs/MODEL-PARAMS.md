@@ -1,5 +1,8 @@
 # 逐例模型与提示词记录（2026-11-13）
 
+> **范围声明（2026-11-27）**：本文覆盖截至 2026-11-26 的 **9 例**；AR6（arvo:42470179）无模型调用（model_params.state=not_applicable）。
+
+
 | case | model | locate prompt_version | verify prompt_version | report prompt_version | llm_enabled | 来源 |
 |---|---|---|---|---|---|---|
 | CG-01 (CG-01-arvo-44034) | deepseek-flash | report-p1 | 未记录 | report-p1 | True | case.json agent |

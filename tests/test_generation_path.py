@@ -12,6 +12,9 @@ from pathlib import Path
 
 import pytest
 
+# 文档范围外新增的案例（各自有独立材料页），不计入这三份 9 例快照
+POST_SCOPE = {"AR6"}
+
 ROOT = Path(__file__).resolve().parent.parent
 WS = ROOT / "workspace"
 DOC = ROOT / "docs" / "GENERATION-PATH.md"
@@ -112,7 +115,7 @@ def rows(text) -> dict[str, str]:
 # A. 覆盖
 # --------------------------------------------------------------------------- #
 def test_covers_nine_high_cases(rows):
-    high = _high_cases()
+    high = [h for h in _high_cases() if h["short"] not in POST_SCOPE]
     assert len(high) == 9, f"高危案例数为 {len(high)}：{[h['short'] for h in high]}"
     missing = [h["short"] for h in high if h["short"] not in rows]
     assert not missing, f"文档漏了：{missing}"

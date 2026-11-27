@@ -1,5 +1,8 @@
 # 生成路径标注：9 个高危案例（builder / model / none）
 
+> **范围声明（2026-11-27）**：本文覆盖截至 2026-11-26 的 **9 例**；AR6（arvo:42470179）为手工构造 PoC，见 [CASE6-AR6-20261127.md](CASE6-AR6-20261127.md)。
+
+
 > 只读标注：本文件不改任何 case.json / result.json / experiments/LEDGER.json，也不新增构造器。
 > 判定全部来自 workspace 落盘字段，逐行给证据路径，不凭印象。
 > 复核：python3 -m pytest tests/test_generation_path.py -q

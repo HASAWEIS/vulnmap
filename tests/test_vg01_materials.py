@@ -11,6 +11,9 @@ from pathlib import Path
 
 import pytest
 
+# 文档范围外新增的案例（各自有独立材料页），不计入这三份 9 例快照
+POST_SCOPE = {"AR6"}
+
 ROOT = Path(__file__).resolve().parent.parent
 WS = ROOT / "workspace"
 VG = WS / "VG-01-nltk-wordnet"
@@ -136,7 +139,7 @@ def test_model_params_exists_and_has_columns():
 
 def test_model_params_covers_nine_high_cases():
     text = MODEL_PARAMS.read_text(encoding="utf-8")
-    high = _high_cases()
+    high = [h for h in _high_cases() if h not in POST_SCOPE]
     assert len(high) == 9, f"高危案例数为 {len(high)}：{high}"
     missing = [c for c in high if c not in text]
     assert not missing, f"MODEL-PARAMS 漏了：{missing}"

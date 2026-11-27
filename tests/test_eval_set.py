@@ -231,7 +231,9 @@ def test_contamination_md_highlights_counts(md):
     s = PROV["summary"]
     assert f"**官方 PoC 模板 {s['with_poc_template']} 例**" in md
     assert f"**干净 {s['clean']} 例**" in md
-    assert s["with_poc_template"] == 3 and s["clean"] == 7
+    # 污染例数是历史事实（3 例，不得增加）；干净例数随新增案例单调不减
+    assert s["with_poc_template"] == 3, f"污染例数变为 {s['with_poc_template']}，历史被改写"
+    assert s["clean"] >= 7, f"干净例数 {s['clean']} 少于基线 7"
 
 
 def test_contamination_md_hard_rule_and_exclusion(md):
