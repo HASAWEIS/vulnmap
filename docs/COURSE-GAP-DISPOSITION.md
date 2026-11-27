@@ -453,3 +453,17 @@ python3 experiments/course-review-batch/recompute_batch.py --check   # CG-29/30/
 
 即：即使 67968 过线，仍差 4 份；CG-18 与 CG-14 各需一个**新的替代根**，
 不能拿同一案例填两个名额。
+---
+
+## 9. 替代根已准入（2026-11-27）
+
+| 项 | 结果 |
+|---|---|
+| 主选 | **arvo:42470179**（wget2，Heap-buffer-overflow WRITE 1，High/asan，`src/options.c:492`） |
+| 备选 | arvo:42473305（capstonenext，Stack WRITE 5，`SStream.c:49`） |
+| 三闸 | G1 去重 ✅ · G2 授权范围 ✅ · G3 镜像/栈/材料 ✅ |
+| 状态 | `planned`，计数 **0** |
+
+CG-18 名额由 `arvo:42470179` 承接；只有双端差分 + 材料齐备并过 A∧B∧C∧D 才计数。
+
+明细：[REPLACEMENT-ROOT-ADMISSION.md](REPLACEMENT-ROOT-ADMISSION.md)。
