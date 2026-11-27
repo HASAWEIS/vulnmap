@@ -82,3 +82,39 @@ python3 experiments/autonomy/demo_agent.py --pack experiments/autonomy/runs/assi
 1. 在保留样例上跑稳定性（多轮、同任务重复），看类别是否稳定为自主；
 2. 把同一套运行包接入课程流程（`bin/platform.py` 的 run_id 与事件流），让“自主运行”可被课程判据直接引用；
 3. 人工案例认定征询（`MANUAL-CASE-ACCEPTANCE-REQUEST.md`）仍待外部答复，不影响本验收。
+## 8. 保留样例稳定性（2026-11-27）
+
+同一任务重复跑，看类别与判定是否漂移：
+
+| 组 | 轮次 | 类别 | 判定 | 稳定 |
+|---|---:|---|---|---|
+| 自主（无介入） | 5 | 全部 `agent_autonomous` | 全部 `pass` | ✅ |
+| 人工介入（提供 `e.kv`） | 3 | 全部 `agent_assisted` | 全部 `fail` | ✅ |
+
+```bash
+python3 experiments/autonomy/stability.py   # 写 experiments/autonomy/stability/summary.json
+```
+
+含义：分类不是偶然判对——同一任务连跑 5 次都判自主且通过；一旦有介入，连跑 3 次都降级。
+
+## 9. 与平台 run_id 的关联（2026-11-27）
+
+`agent/autonomy/bridge.py::attach_platform` 只读平台库，把关联写进运行包 `run.json.platform`：
+
+```json
+{"db": "...", "task_id": "...", "platform_run_id": "...",
+ "platform_status": "closed", "event_count": 3}
+```
+
+校验器新增 `platform_run_linked`：一旦 attach，就要求 `platform_run_id == run.run_id`，
+不一致即 fail（防止拿 A 运行的工件冒充 B 运行）。
+
+CLI：
+
+```bash
+python3 bin/autonomy.py classify  experiments/autonomy/runs/auto
+python3 bin/autonomy.py verify    experiments/autonomy/runs/auto \
+  --expected experiments/autonomy/holdout/expected.json
+python3 bin/autonomy.py attach    experiments/autonomy/runs/auto \
+  --db .platform/platform.db --task <platform-task-id>
+```

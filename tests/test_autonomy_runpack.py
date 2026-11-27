@@ -147,3 +147,56 @@ def test_guessing_on_unobservable_fails(tmp_path):
     res = verify(pack.root, expected_path=EXPECTED)
     assert res["checks"]["expected_matched"] is False
     assert res["verdict"] == "fail"
+
+
+# ---------------------------------------------------------------- 平台 run_id 关联
+def _platform_db(tmp_path, run_id="r-test", task_id="t"):
+    import sqlite3
+    db = tmp_path / "platform.db"
+    con = sqlite3.connect(db)
+    con.execute("create table tasks (id text, task_id text, status text)")
+    con.execute("create table task_events (task_id text, seq integer)")
+    con.execute("insert into tasks values (?,?,?)", (run_id, task_id, "closed"))
+    for i in range(1, 4):
+        con.execute("insert into task_events values (?,?)", (run_id, i))
+    con.commit()
+    con.close()
+    return db
+
+
+def test_platform_link_matches(tmp_path):
+    from agent.autonomy.bridge import attach_platform
+    pack = _pack(tmp_path)
+    db = _platform_db(tmp_path)
+    out = attach_platform(pack, db_path=db, task_id="t")
+    assert out["attached"] is True and out["events"] == 3
+    findings = {"a.kv": _emit(pack, "a.kv", 1, 0)}
+    _finish(pack, findings)
+    res = verify(pack.root, expected_path=EXPECTED)
+    assert res["checks"]["platform_run_linked"] is True
+
+
+def test_platform_link_mismatch_fails(tmp_path):
+    from agent.autonomy.bridge import attach_platform
+    pack = _pack(tmp_path)
+    db = _platform_db(tmp_path, run_id="r-other")
+    attach_platform(pack, db_path=db, task_id="t")
+    findings = {"a.kv": _emit(pack, "a.kv", 1, 0)}
+    _finish(pack, findings)
+    res = verify(pack.root, expected_path=EXPECTED)
+    assert res["checks"]["platform_run_linked"] is False
+    assert res["verdict"] == "fail"
+    assert any("不一致" in r for r in res["reasons"])
+
+
+def test_stability_summary_is_stable():
+    """保留样例多轮结果必须稳定（自主恒自主、介入恒降级）。"""
+    import json as _json
+    p = ROOT / "experiments" / "autonomy" / "stability" / "summary.json"
+    if not p.is_file():
+        pytest.skip("未跑稳定性脚本")
+    s = _json.loads(p.read_text(encoding="utf-8"))
+    assert s["auto_rounds"] >= 3 and s["auto_stable"] is True, s
+    assert s["auto_classes"] == ["agent_autonomous"], s
+    assert s["auto_verdicts"] == ["pass"], s
+    assert s["assisted_stable"] is True and s["assisted_classes"] == ["agent_assisted"], s

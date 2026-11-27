@@ -52,6 +52,14 @@ def verify(pack_dir, *, expected_path, require_autonomous=True) -> dict:
     if over_time:
         reasons.append("运行时长 %.1fs 超过预算 %ss" % (elapsed, max_sec))
 
+    # 2b) 与平台 run_id 的关联（若已 attach）
+    plat = (run.get("platform") or {}).get("platform_run_id")
+    if plat is not None:
+        linked = str(plat) == str(run.get("run_id"))
+        checks["platform_run_linked"] = linked
+        if not linked:
+            reasons.append("平台 run_id=%s 与运行包 run_id=%s 不一致" % (plat, run.get("run_id")))
+
     # 3) 结果归属本次运行
     same_run = bool(result) and str(result.get("run_id")) == str(run.get("run_id"))
     checks["result_belongs_to_run"] = same_run
@@ -111,6 +119,7 @@ def verify(pack_dir, *, expected_path, require_autonomous=True) -> dict:
         reasons.append("类别为 %s，不满足自主要求" % cls["class"])
 
     hard_fail = [k for k in ("frozen_inputs_intact", "budget_observations",
+                             "platform_run_linked",
                              "budget_seconds", "result_belongs_to_run",
                              "artifact_provenance", "class_autonomous")
                  if checks.get(k) is False]
